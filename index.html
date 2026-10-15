@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Z1R Unified</title>
+<meta name="description" content="Roll Zelda 1 randomizer seeds, play them, and track your progress in one page.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Z1R">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* NES palette: black $0F, white $30, subscreen blue $12, life red $16,
+       overworld sand $37, triforce gold $28, gray $00, Link green $2A */
+    --black: #000000; --white: #FCFCFC; --frame: #0058F8; --frame-lit: #3CBCFC;
+    --life: #D82800; --sand: #FCD8A8; --gold: #F8B800; --gray: #7C7C7C; --link: #B8F818;
+    --panel: #000000; --cell: #262626; --cell-line: #3a3a3a; --text-dim: #A8A8A8;
+    --px: "Pixelify Sans", ui-monospace, monospace;
+    --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--black); color: var(--white);
+    font: 15px/1.45 var(--body); -webkit-text-size-adjust: 100%; }
+  body { display: grid; grid-template-rows: auto 1fr; }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* ── header ─────────────────────────────────────────── */
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    padding: 8px 16px; border-bottom: 2px solid var(--frame);
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  .brand { font: 600 20px/1 var(--px); margin: 0 6px 0 0; display: flex; align-items: center; gap: 8px; }
+  .brand svg { width: 22px; height: 22px; }
+  .btn { background: var(--black); border: 2px solid var(--frame); color: var(--white); padding: 6px 12px;
+    font: 400 15px/1.1 var(--px); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    min-height: 36px; }
+  .btn:hover { border-color: var(--frame-lit); }
+  .btn.primary { background: var(--life); border-color: var(--life); }
+  .btn.primary:hover { background: #F83800; border-color: #F83800; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .spacer { flex: 1; }
+  .pill { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  .pill i { width: 8px; height: 8px; background: var(--gray); display: inline-block; }
+  .pill.on i { background: var(--link); }
+  .pill.wait i { background: var(--gold); }
+
+  /* ── main layout ────────────────────────────────────── */
+  main { display: grid; grid-template-columns: minmax(0, 1fr) var(--aside-w, 470px); min-height: 0; }
+  #game-wrap { position: relative; min-height: 0; background: #000; }
+  #game { position: absolute; inset: 0; }
+  #placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 16px;
+    align-items: center; justify-content: center; text-align: center; padding: 24px; }
+  #placeholder h2 { font: 600 30px/1.1 var(--px); margin: 0; }
+  #placeholder p { max-width: 44ch; margin: 0; color: var(--text-dim); }
+  #placeholder .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  #placeholder .fine { font-size: 13px; }
+  .tri-mark { width: 64px; height: 64px; }
+
+  aside { border-left: 2px solid var(--frame); overflow-y: auto; min-height: 0;
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom)); }
+
+  /* ── tracker ────────────────────────────────────────── */
+  .t-stats { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 0 2px 10px; font: 400 17px/1 var(--px); }
+  .stat { display: inline-flex; align-items: center; gap: 5px; }
+  .stat .ico { width: 18px; height: 18px; display: inline-block; }
+  .stat .ico svg, .item .ico svg, .lv svg, .ow-cell .pk svg, .room svg, .log-list .ico svg { width: 100%; height: 100%; display: block; }
+
+  .t-items { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 8px;
+    border: 2px solid var(--frame); }
+  .item { position: relative; aspect-ratio: 1; background: none; border: 0; padding: 14%; cursor: pointer; }
+  .item .ico { display: block; width: 100%; height: 100%; opacity: .2; filter: grayscale(1); }
+  .item.have .ico { opacity: 1; filter: none; }
+  .item:hover { background: #151515; }
+  .item .badge { position: absolute; right: 1px; bottom: 0; font: 400 12px/1 var(--px); color: var(--white);
+    text-shadow: 0 0 2px #000, 0 0 2px #000; }
+  .item.manual::after { content: ""; position: absolute; left: 3px; top: 3px; width: 5px; height: 5px; background: var(--gold); }
+
+  .t-levels { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; margin-top: 10px; }
+  .lv { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 5px;
+    border: 2px solid var(--cell-line); }
+  .lv.done { border-color: var(--gold); }
+  .lv button { background: none; border: 0; padding: 0; cursor: pointer; }
+  .lv-num { font: 600 18px/1 var(--px); color: var(--white); min-width: 28px; min-height: 22px; }
+  .lv-num.here { color: var(--link); }
+  .lv-tri { width: 26px; height: 26px; }
+  .lv-tri svg, .lv-mini svg { opacity: .2; filter: grayscale(1); }
+  .lv-tri.have svg, .lv-mini.have svg { opacity: 1; filter: none; }
+  .lv-mc { display: flex; gap: 1px; }
+  .lv-mini { width: 16px; height: 16px; }
+  .lv-loc { font: 400 13px/1 var(--px); color: var(--text-dim); min-height: 13px; }
+
+  .t-tabs { display: flex; gap: 2px; margin: 14px 0 8px; border-bottom: 2px solid var(--frame); }
+  .t-tabs button { background: none; border: 0; padding: 7px 12px 6px; font: 400 16px/1 var(--px);
+    color: var(--text-dim); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .t-tabs button[aria-selected="true"] { color: var(--white); border-bottom-color: var(--life); }
+
+  /* Overworld: the NES pause-screen minimap, grown up. */
+  .ow-cols, .ow-grid { display: grid; grid-template-columns: 14px repeat(16, minmax(0, 1fr)); gap: 2px; }
+  .ow-cols { font: 400 10px/1 var(--px); color: var(--gray); text-align: center; margin-bottom: 2px; }
+  .ow-cols::before { content: ""; }
+  .ow-row { font: 400 10px/1 var(--px); color: var(--gray); display: flex; align-items: center; }
+  .ow-cell { position: relative; aspect-ratio: 16 / 11; background: var(--cell); border: 0; padding: 0;
+    cursor: pointer; overflow: hidden; font: 600 11px/1 var(--px); color: var(--white); }
+  .ow-cell.seen { background: var(--sand); color: #000; }
+  .ow-cell:hover { outline: 2px solid var(--frame-lit); outline-offset: -2px; }
+  .ow-cell .tag { position: relative; z-index: 1; }
+  .ow-cell[data-kind="lv"] .tag { background: var(--life); color: var(--white); padding: 1px 2px; }
+  .ow-cell[data-kind="cave"] .tag { background: var(--frame); color: var(--white); padding: 1px 2px; }
+  .ow-cell[data-kind="other"] .tag { background: #000; color: var(--white); padding: 1px 2px; }
+  .ow-cell .pk { position: absolute; right: 0; bottom: 0; width: 55%; height: 80%; opacity: .95; }
+  .ow-cell .pk:empty { display: none; }
+  .ow-cell.secret::before { content: ""; position: absolute; left: 2px; top: 2px; width: 4px; height: 4px; background: #000; }
+  .ow-cell.seen.secret::before { background: var(--life); }
+  .ow-cell.here::after, .room.here::after { content: ""; position: absolute; inset: 0; margin: auto;
+    width: 6px; height: 6px; background: var(--link); box-shadow: 0 0 0 2px #000; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .hint { color: var(--text-dim); font-size: 13px; margin: 8px 2px 0; }
+  .empty { color: var(--text-dim); margin: 12px 2px; }
+
+  .dg-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .dg-chips button { background: none; border: 2px solid var(--cell-line); padding: 4px 8px; cursor: pointer;
+    font: 400 14px/1 var(--px); }
+  .dg-chips button[aria-pressed="true"] { border-color: var(--frame); background: var(--frame); }
+  .dg-chips button.here { color: var(--link); }
+  .dg-map { display: flex; justify-content: center; padding: 8px 0; }
+  .dg-grid { --room: min(36px, calc((100% - 2px * var(--cols)) / var(--cols))); display: grid; gap: 3px; width: 100%;
+    justify-content: center; }
+  .room { position: relative; aspect-ratio: 1; background: var(--frame); padding: 3px; }
+  .room.void { background: none; }
+  .room.taken { box-shadow: inset 0 -3px 0 var(--gold); }
+
+  .log-list { list-style: none; margin: 0; padding: 0; }
+  .log-list li { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center;
+    padding: 7px 2px; border-bottom: 1px solid #1d1d1d; }
+  .log-list .ico { width: 22px; height: 22px; }
+  .log-list .where { color: var(--text-dim); font-size: 13px; text-align: right; }
+
+  .t-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px;
+    padding-top: 10px; border-top: 1px solid #1d1d1d; font-size: 13px; color: var(--text-dim); }
+  .linkish { background: none; border: 0; color: var(--text-dim); text-decoration: underline; cursor: pointer; padding: 6px 0; }
+  .linkish:hover { color: var(--white); }
+
+  .picker { position: fixed; z-index: 50; background: #000; border: 2px solid var(--frame); padding: 10px;
+    box-shadow: 0 0 0 4px #000; max-height: 80vh; overflow: auto; }
+  .pk-head { font: 600 16px/1 var(--px); margin-bottom: 8px; }
+  .pk-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .pk-row button, .pk-clear { background: #000; border: 2px solid var(--cell-line); padding: 6px 8px; cursor: pointer;
+    font-size: 13px; min-height: 34px; }
+  .pk-lv button { font: 600 15px/1 var(--px); min-width: 38px; border-color: var(--life); }
+  .pk-row button.on { background: var(--frame); border-color: var(--frame); }
+  .pk-row button:hover, .pk-clear:hover { border-color: var(--frame-lit); }
+
+  /* ── seed dialog ────────────────────────────────────── */
+  dialog { background: #000; color: var(--white); border: 2px solid var(--frame); padding: 0;
+    width: min(640px, calc(100vw - 20px)); max-height: calc(100dvh - 20px); }
+  dialog::backdrop { background: rgba(0, 0, 0, .75); }
+  .dlg { display: flex; flex-direction: column; }
+  .dlg-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
+    border-bottom: 2px solid var(--frame); position: sticky; top: 0; background: #000; z-index: 1; }
+  .dlg-head h2 { margin: 0; font: 600 22px/1 var(--px); }
+  .dlg-head small { color: var(--text-dim); font-size: 13px; margin-left: 10px; }
+  .x { background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer; padding: 4px 8px; }
+  .step { padding: 14px 16px; border-bottom: 1px solid #1d1d1d; }
+  .step h3 { margin: 0 0 8px; font: 400 17px/1 var(--px); color: var(--gold); }
+  .field { display: grid; gap: 4px; margin: 10px 0 0; font-size: 13px; color: var(--text-dim); }
+  .field input, .field select, .row input, .flag-row select { background: #000; border: 2px solid var(--cell-line);
+    color: var(--white); padding: 7px 8px; font-size: 15px; width: 100%; min-height: 38px; }
+  .field input { font-family: ui-monospace, monospace; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; font: 400 18px/1 var(--px); }
+  .msg { font-size: 13px; color: var(--text-dim); margin: 8px 0 0; }
+  .msg:empty { display: none; }
+  .msg.ok { color: var(--link); }
+  .msg.warn { color: var(--gold); }
+  .msg.bad { color: #F87858; }
+  .msg.busy::before { content: ""; display: inline-block; width: 8px; height: 8px; background: var(--gold);
+    margin-right: 8px; animation: blink .8s steps(2) infinite; }
+  details summary { cursor: pointer; margin-top: 12px; font-size: 14px; }
+  #flag-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; }
+  #flag-tabs button { background: none; border: 2px solid var(--cell-line); padding: 5px 8px; cursor: pointer; font-size: 13px; }
+  #flag-tabs button[aria-pressed="true"] { background: var(--frame); border-color: var(--frame); }
+  #flag-fields { display: grid; gap: 6px; }
+  .flag-row { display: grid; grid-template-columns: 1fr minmax(140px, 46%); gap: 10px; align-items: center; font-size: 14px; }
+  .dlg-foot { padding: 14px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .dlg-foot .msg { margin: 0; flex: 1 1 200px; }
+  #result { padding: 16px; border-top: 2px solid var(--gold); }
+  #result h3 { margin: 0 0 4px; font: 600 20px/1.1 var(--px); }
+  #result p { margin: 0 0 12px; color: var(--text-dim); font-size: 14px; }
+  #result .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fine { font-size: 12px; color: var(--text-dim); }
+  .fine a { color: var(--frame-lit); }
+
+  /* ── phones and narrow windows ──────────────────────── */
+  @media (max-width: 900px) {
+    html, body { height: auto; }
+    body { display: block; }
+    main { display: block; }
+    /* Taller than the picture so the touch controls sit below the game. */
+    #game-wrap { height: min(calc(100vw * 15 / 16 + 190px), 92svh); }
+    aside { border-left: 0; border-top: 2px solid var(--frame); overflow: visible; }
+    header { gap: 8px; }
+    .brand { font-size: 18px; }
+    .pill span { font-size: 12px; }
+    #pad-status { display: none; }
+  }
+  @media (max-width: 420px) {
+    aside { padding-left: 8px; padding-right: 8px; }
+    .t-items { padding: 4px; gap: 2px; }
+    .lv-num { font-size: 16px; }
+    .lv-tri { width: 22px; height: 22px; }
+    .lv-mini { width: 14px; height: 14px; }
+    .ow-cell { font-size: 9px; }
+    .ow-cols, .ow-grid { grid-template-columns: 10px repeat(16, minmax(0, 1fr)); gap: 1px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ow-cell.here::after, .room.here::after, .msg.busy::before { animation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand"><span id="brand-mark"></span>Z1R Unified</h1>
+  <button class="btn primary" id="new-seed" type="button">New seed</button>
+  <label class="btn" for="rom-input">Play ROM file</label>
+  <!-- No `accept` filter: iOS grays out .nes files it doesn't know. -->
+  <input type="file" id="rom-input" hidden>
+  <div class="spacer"></div>
+  <button class="btn" id="install-btn" type="button" hidden>Install app</button>
+  <div id="pad-status" class="pill"><i></i><span>No controller</span></div>
+  <div id="link-status" class="pill"><i></i><span>No game running</span></div>
+</header>
+
+<main>
+  <div id="game-wrap">
+    <div id="game"></div>
+    <div id="placeholder">
+      <span class="tri-mark" id="tri-mark"></span>
+      <h2>Roll a seed and play</h2>
+      <p>Generate a randomized Legend of Zelda from your own ROM, play it right here, and the tracker follows along as you go.</p>
+      <div class="actions">
+        <button class="btn primary" id="ph-new" type="button">Roll a new seed</button>
+        <button class="btn" id="ph-continue" type="button" hidden>Continue</button>
+        <label class="btn" for="rom-input">Play ROM file</label>
+      </div>
+      <p class="fine">Your ROM never leaves this device. Seeds are made by <a href="https://github.com/tetraly/zora" target="_blank" rel="noopener">ZORA</a>.</p>
+    </div>
+  </div>
+  <aside id="tracker" aria-label="Tracker"></aside>
+</main>
+
+<dialog id="seed-dlg" aria-labelledby="seed-title">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <div><h2 id="seed-title" style="display:inline">New seed</h2><small id="zora-version"></small></div>
+      <button class="x" value="close" aria-label="Close">×</button>
+    </div>
+
+    <section class="step">
+      <h3>Your Zelda ROM</h3>
+      <p id="base-status" class="msg"></p>
+      <div style="margin-top:10px"><label class="btn" for="base-input">Choose ROM file</label>
+        <input type="file" id="base-input" hidden></div>
+    </section>
+
+    <section class="step">
+      <h3>Flags</h3>
+      <label class="field">Preset
+        <select id="preset"><option>Loading…</option></select></label>
+      <label class="field">Flag string
+        <input id="flags" spellcheck="false" autocomplete="off" autocapitalize="off"></label>
+      <label class="field">ZORA extras string
+        <input id="zflags" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="None"></label>
+      <p id="flag-msg" class="msg"></p>
+      <details id="flag-editor">
+        <summary>Change individual flags</summary>
+        <div id="flag-tabs"></div>
+        <div id="flag-fields"></div>
+      </details>
+    </section>
+
+    <section class="step">
+      <h3>Seed</h3>
+      <div class="row">
+        <input id="seed" inputmode="numeric" autocomplete="off" aria-label="Seed number">
+        <button class="btn" type="button" id="dice">Random</button>
+      </div>
+    </section>
+
+    <div class="dlg-foot">
+      <p id="gen-status" class="msg"></p>
+      <button class="btn primary" type="button" id="generate" disabled>Generate</button>
+    </div>
+
+    <section id="result" hidden>
+      <h3>Seed ready</h3>
+      <p><span id="result-seed"></span><br>File-select code: <span id="result-code"></span></p>
+      <div class="actions">
+        <button class="btn primary" type="button" id="play">Play now</button>
+        <button class="btn" type="button" id="dl-rom">Download ROM</button>
+        <button class="btn" type="button" id="dl-spoiler">Spoiler log</button>
+      </div>
+    </section>
+  </form>
+</dialog>
+
+<script src="js/icons.js"></script>
+<script src="js/store.js"></script>
+<script src="js/nes-bridge.js"></script>
+<script src="js/tracker.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

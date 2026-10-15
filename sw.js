@@ -1,0 +1,42 @@
+/*
+ * Service worker: makes the site installable and lets it open offline.
+ * Network-first for this site's own files (updates show up as soon as you're
+ * online); the cache is a fallback. The emulator, Pyodide and fonts are cached
+ * as they load, so once you've played and rolled a seed online, both work
+ * without a connection.
+ */
+const CACHE = 'z1r-unified-v1';
+const EXTERNAL = [
+  'https://cdn.emulatorjs.org/',
+  'https://cdn.jsdelivr.net/pyodide/',
+  'https://fonts.googleapis.com/',
+  'https://fonts.gstatic.com/',
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
+    './', './index.html', './manifest.webmanifest', './js/icons.js', './js/store.js', './js/nes-bridge.js',
+    './js/tracker.js', './js/seed.js', './js/app.js',
+  ])).catch(() => {}));
+  self.skipWaiting();
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = req.url;
+  const own = url.startsWith(self.registration.scope);
+  if (!own && !EXTERNAL.some((p) => url.startsWith(p))) return;
+  e.respondWith(
+    fetch(req).then((res) => {
+      if (res && (res.ok || res.type === 'opaque')) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(req, { ignoreSearch: own }).then((hit) => hit || Response.error()))
+  );
+});

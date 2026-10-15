@@ -80,6 +80,7 @@
 
   function boot(file, gameName) {
     $('placeholder').remove();
+    document.body.classList.add('playing');
     window.EJS_player = '#game';
     window.EJS_core = 'fceumm';          // the bridge reads FCEUmm's state format
     window.EJS_pathtodata = EJS_CDN;

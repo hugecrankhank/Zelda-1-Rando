@@ -72,31 +72,34 @@
   /* ── tracker ────────────────────────────────────────── */
   .t-stats { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 0 2px 10px; font: 400 17px/1 var(--px); }
   .stat { display: inline-flex; align-items: center; gap: 5px; }
-  .stat .ico { width: 18px; height: 18px; display: inline-block; }
+  .stat .ico { width: 18px; height: 18px; display: inline-block; flex: none; }
   .stat .ico svg, .item .ico svg, .lv svg, .ow-cell .pk svg, .room svg, .log-list .ico svg { width: 100%; height: 100%; display: block; }
 
-  .t-items { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 8px;
+  .t-items { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 8px;
     border: 2px solid var(--frame); }
-  .item { position: relative; aspect-ratio: 1; background: none; border: 0; padding: 14%; cursor: pointer; }
-  .item .ico { display: block; width: 100%; height: 100%; opacity: .2; filter: grayscale(1); }
+  /* No percentage padding here: Safari resolves it against the whole grid,
+     which made every item overflow on iPhone. Size the icon instead. */
+  .item { position: relative; min-width: 0; aspect-ratio: 1; background: none; border: 0; padding: 0;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .item .ico { display: block; width: 72%; aspect-ratio: 1; opacity: .2; filter: grayscale(1); }
   .item.have .ico { opacity: 1; filter: none; }
   .item:hover { background: #151515; }
   .item .badge { position: absolute; right: 1px; bottom: 0; font: 400 12px/1 var(--px); color: var(--white);
     text-shadow: 0 0 2px #000, 0 0 2px #000; }
   .item.manual::after { content: ""; position: absolute; left: 3px; top: 3px; width: 5px; height: 5px; background: var(--gold); }
 
-  .t-levels { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; margin-top: 10px; }
-  .lv { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 5px;
+  .t-levels { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 2px; margin-top: 10px; }
+  .lv { min-width: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 5px;
     border: 2px solid var(--cell-line); }
   .lv.done { border-color: var(--gold); }
   .lv button { background: none; border: 0; padding: 0; cursor: pointer; }
-  .lv-num { font: 600 18px/1 var(--px); color: var(--white); min-width: 28px; min-height: 22px; }
+  .lv-num { font: 600 18px/1 var(--px); color: var(--white); width: 100%; min-height: 22px; }
   .lv-num.here { color: var(--link); }
-  .lv-tri { width: 26px; height: 26px; }
+  .lv-tri { width: min(26px, 80%); aspect-ratio: 1; }
   .lv-tri svg, .lv-mini svg { opacity: .2; filter: grayscale(1); }
   .lv-tri.have svg, .lv-mini.have svg { opacity: 1; filter: none; }
   .lv-mc { display: flex; gap: 1px; }
-  .lv-mini { width: 16px; height: 16px; }
+  .lv-mini { width: 16px; height: 16px; flex: none; }
   .lv-loc { font: 400 13px/1 var(--px); color: var(--text-dim); min-height: 13px; }
 
   .t-tabs { display: flex; gap: 2px; margin: 14px 0 8px; border-bottom: 2px solid var(--frame); }
@@ -203,23 +206,33 @@
 
   /* ── phones and narrow windows ──────────────────────── */
   @media (max-width: 900px) {
-    html, body { height: auto; }
-    body { display: block; }
-    main { display: block; }
-    /* Taller than the picture so the touch controls sit below the game. */
+    html, body { height: auto; overflow-x: hidden; }
+    body { display: block; width: 100%; }
+    main { display: block; width: 100%; }
+    /* While playing: taller than the picture so the touch controls sit below the game. */
     #game-wrap { height: min(calc(100vw * 15 / 16 + 190px), 92svh); }
-    aside { border-left: 0; border-top: 2px solid var(--frame); overflow: visible; }
+    /* Nothing loaded yet: just the welcome, so the tracker is on screen too. */
+    body:not(.playing) #game-wrap { height: auto; }
+    body:not(.playing) #placeholder { position: static; padding: 28px 18px 30px; gap: 12px; }
+    #placeholder h2 { font-size: 26px; }
+    .tri-mark { width: 44px; height: 44px; }
+    aside { width: 100%; border-left: 0; border-top: 2px solid var(--frame); overflow: visible; }
     header { gap: 8px; }
     .brand { font-size: 18px; }
     .pill span { font-size: 12px; }
     #pad-status { display: none; }
   }
   @media (max-width: 420px) {
+    header { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+    .btn { padding: 6px 9px; font-size: 14px; }
     aside { padding-left: 8px; padding-right: 8px; }
+    .t-stats { gap: 4px 12px; font-size: 16px; }
     .t-items { padding: 4px; gap: 2px; }
+    .lv { padding: 5px 0 4px; gap: 2px; }
     .lv-num { font-size: 16px; }
-    .lv-tri { width: 22px; height: 22px; }
-    .lv-mini { width: 14px; height: 14px; }
+    .lv-mini { width: 12px; height: 12px; }
+    .lv-loc { font-size: 11px; }
+    .t-tabs button { padding: 7px 9px 6px; font-size: 15px; }
     .ow-cell { font-size: 9px; }
     .ow-cols, .ow-grid { grid-template-columns: 10px repeat(16, minmax(0, 1fr)); gap: 1px; }
   }

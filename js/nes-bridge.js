@@ -22,8 +22,12 @@
   const RAM_SIZE = 0x800;
   // SFORMAT entry header for RAM: desc "RAM\0" + size 0x00000800 (LE).
   const TAG = [0x52, 0x41, 0x4D, 0x00, 0x00, 0x08, 0x00, 0x00];
-  const SNAPSHOT_MIN_MS = 250;
-  const VERIFY_EVERY_MS = 4000;
+  // Save states are only taken to find RAM, never to read it: some EmulatorJS
+  // builds don't free the state buffer, so frequent snapshots leak memory and
+  // iOS eventually closes the app.
+  const SNAPSHOT_MIN_MS = 1500;      // fallback mode only
+  const VERIFY_EVERY_MS = 60000;     // heap-search mode: rare sanity check
+  const RELOCATE_EVERY_MS = 30000;   // fallback mode: retry going live
 
   const st = { ptr: -1, mode: 'idle', snap: null, snapAt: 0, lastVerify: 0, listeners: new Set() };
 
@@ -67,7 +71,29 @@
 
   function emit() { const s = status(); st.listeners.forEach((fn) => { try { fn(s); } catch (e) {} }); }
 
+  // Newer EmulatorJS cores export get_memory_data, which reports where the
+  // core keeps system RAM. Call the core directly (not EmulatorJS's JS wrapper,
+  // which frees a buffer it doesn't own). No save state needed at all.
+  function locateDirect() {
+    const g = gm(), M = g && g.Module;
+    if (!M || typeof M._get_memory_data !== 'function' || typeof M.ccall !== 'function') return false;
+    try {
+      const info = M.ccall('get_memory_data', 'string', ['string'], ['RETRO_MEMORY_SYSTEM_RAM']);
+      const parts = String(info || '').split('|');
+      const size = parseInt(parts[0], 10), ptr = parseInt(parts[1], 10);
+      if (size >= RAM_SIZE && ptr > 0 && heap() && ptr + RAM_SIZE <= heap().length) {
+        st.ptr = ptr; st.mode = 'live'; st.direct = true; st.lastVerify = performance.now();
+        console.log('[nes-bridge] RAM from the core at 0x' + ptr.toString(16));
+        emit();
+        return true;
+      }
+    } catch (e) { console.warn('[nes-bridge] get_memory_data unavailable', e); }
+    return false;
+  }
+
   function locate() {
+    if (locateDirect()) return true;
+    st.direct = false;
     const ram = snapshot(), h = heap();
     if (!ram || !h) return false;
     st.snap = ram; st.snapAt = performance.now(); st.lastVerify = st.snapAt;
@@ -105,6 +131,7 @@
   }
 
   function verify() {
+    if (st.direct) return;            // the core told us where RAM is
     const now = performance.now();
     if (now - st.lastVerify < VERIFY_EVERY_MS) return;
     st.lastVerify = now;
@@ -134,13 +161,13 @@
     if (now - st.snapAt > SNAPSHOT_MIN_MS) {
       const s = snapshot();
       if (s) { st.snap = s; st.snapAt = now; }
-      if (st.mode === 'snapshot' && now - st.lastVerify > VERIFY_EVERY_MS) locate();  // try to go live
+      if (st.mode === 'snapshot' && now - st.lastVerify > RELOCATE_EVERY_MS) locate();  // try to go live
     }
     return st.snap;
   }
 
-  function status() { return { running: !!gm(), mode: st.mode, ptr: st.ptr }; }
-  function invalidate() { st.ptr = -1; st.mode = 'idle'; st.snap = null; emit(); }
+  function status() { return { running: !!gm(), mode: st.mode, direct: !!st.direct, ptr: st.ptr }; }
+  function invalidate() { st.ptr = -1; st.mode = 'idle'; st.direct = false; st.snap = null; emit(); }
   function peek(addr, n) {
     const r = ram(); if (!r) return 'no RAM';
     const out = [];

@@ -16,6 +16,8 @@
   Z1Tracker.onLink((s) => {
     const el = $('link-status');
     el.className = 'pill' + (s === 'live' ? ' on' : s === 'waiting' ? ' wait' : '');
+    const b = window.NesBridge && NesBridge.status();
+    el.title = s === 'live' && b ? 'Autotracking: ' + (b.direct ? 'direct RAM' : b.mode === 'live' ? 'located RAM' : 'snapshots') : '';
     el.querySelector('span').textContent =
       s === 'live' ? 'Autotracking' : s === 'waiting' ? (window.EJS_emulator ? 'Waiting for a save file' : 'Starting…') : 'No game running';
   });

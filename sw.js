@@ -5,7 +5,7 @@
  * as they load, so once you've played and rolled a seed online, both work
  * without a connection.
  */
-const CACHE = 'z1r-unified-v1';
+const CACHE = 'z1r-unified-v2';
 const EXTERNAL = [
   'https://cdn.emulatorjs.org/',
   'https://cdn.jsdelivr.net/pyodide/',
@@ -30,8 +30,11 @@ self.addEventListener('fetch', (e) => {
   const url = req.url;
   const own = url.startsWith(self.registration.scope);
   if (!own && !EXTERNAL.some((p) => url.startsWith(p))) return;
+  // Our own files always revalidate with the server (GitHub Pages otherwise
+  // lets browsers reuse a page for 10 minutes, which brought back old
+  // versions after an update). Unchanged files come back as a quick 304.
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(own ? req.url : req, own ? { cache: 'no-cache', credentials: 'same-origin' } : undefined).then((res) => {
       if (res && (res.ok || res.type === 'opaque')) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});

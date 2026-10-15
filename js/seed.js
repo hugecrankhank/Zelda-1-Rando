@@ -260,6 +260,7 @@
   async function spoiler() {
     if (!last) return;
     try {
+      await startWorker();
       const { report } = await ask('report', { bytes: last.rom, seed: last.meta.seed, flags: last.meta.flags, zoraFlags: last.meta.zoraFlags });
       download(report.spoiler, report.spoilerName || ('ZORA_' + last.meta.seed + '_spoiler.txt'), 'text/plain');
     } catch (e) {
@@ -296,5 +297,16 @@
     loadBaseFromStore();
   }
 
-  window.Z1Seed = { init, open };
+  // Free the randomizer (Pyodide holds a lot of memory) once a game is running.
+  // iOS kills tabs that use too much memory, which looks like a crash mid-game.
+  // It reloads on its own the next time the dialog opens.
+  function release() {
+    if (!worker || busy) return;
+    try { worker.terminate(); } catch (e) {}
+    worker = null; ready = null; metadata = null;
+    pending.forEach((p) => p.reject(new Error('The randomizer was closed.')));
+    pending.clear();
+  }
+
+  window.Z1Seed = { init, open, release };
 })();

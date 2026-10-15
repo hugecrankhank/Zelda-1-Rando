@@ -208,21 +208,33 @@
   .step .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 
   /* ── seed dialog ────────────────────────────────────── */
-  dialog { overflow: auto; background: #000; color: var(--white); border: 2px solid var(--frame); padding: 0;
-    width: min(640px, calc(100vw - 20px)); max-height: calc(100dvh - 20px); }
+  /* Dialogs stay inside the safe area: the installed iPhone app draws under
+     the status bar, which hid the top of a full-height dialog (and its ×). */
+  dialog { overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    background: #000; color: var(--white); border: 2px solid var(--frame); padding: 0;
+    position: fixed; margin: auto;
+    inset: calc(env(safe-area-inset-top) + 10px) 0 calc(env(safe-area-inset-bottom) + 10px) 0;
+    width: min(640px, calc(100vw - 20px)); height: fit-content;
+    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px); }
   dialog::backdrop { background: rgba(0, 0, 0, .75); }
   .dlg { display: flex; flex-direction: column; }
   .dlg-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
     border-bottom: 2px solid var(--frame); position: sticky; top: 0; background: #000; z-index: 1; }
   .dlg-head h2 { margin: 0; font: 600 22px/1 var(--px); }
   .dlg-head small { color: var(--text-dim); font-size: 13px; margin-left: 10px; }
-  .x { background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer; padding: 4px 8px; }
+  .x { background: none; border: 0; font-size: 28px; line-height: 1; cursor: pointer; padding: 0;
+    width: 44px; height: 44px; margin: -8px -10px -8px 0; flex: none; }
   .step { padding: 14px 16px; border-bottom: 1px solid #1d1d1d; }
   .step h3 { margin: 0 0 8px; font: 400 17px/1 var(--px); color: var(--gold); }
   .field { display: grid; gap: 4px; margin: 10px 0 0; font-size: 13px; color: var(--text-dim); }
   .field input, .field select, .row input, .flag-row select { background: #000; border: 2px solid var(--cell-line);
     color: var(--white); padding: 7px 8px; font-size: 15px; width: 100%; min-height: 38px; }
   .field input { font-family: ui-monospace, monospace; }
+  /* Square dropdowns with our own arrow (iOS otherwise draws rounded pills). */
+  .field select, .flag-row select { -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 30px;
+    background: #000 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23A8A8A8'/%3E%3C/svg%3E") no-repeat right 10px center / 10px 6px; }
+  .field input, .row input { border-radius: 0; -webkit-appearance: none; appearance: none; }
   .row { display: flex; gap: 8px; }
   .row input { flex: 1; font: 400 18px/1 var(--px); }
   .msg { font-size: 13px; color: var(--text-dim); margin: 8px 0 0; }

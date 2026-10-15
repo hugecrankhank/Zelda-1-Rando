@@ -83,6 +83,10 @@ seeds with the seed, flags and spoiler log in the ZORA Discord.
 - **FCEUmm core only.** The bridge parses FCEUmm's state format.
 - **Changing games reloads the page.** EmulatorJS can't swap games in place.
   The new seed is stored first and starts right after the reload.
+- **iPhone can close the app when memory runs low.** The randomizer is
+  unloaded once a game starts, and the running game is snapshotted every 20 s
+  and whenever the app goes to the background, so **Continue** resumes right
+  where you were.
 - **The first seed needs a connection** to download Pyodide (~10 MB); after
   that it's cached.
 

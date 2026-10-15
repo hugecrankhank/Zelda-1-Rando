@@ -36,7 +36,7 @@
     // A reload asked for by "play a different game" boots straight in.
     if (sessionStorage.getItem('z1ru:autoplay')) { sessionStorage.removeItem('z1ru:autoplay'); play(stored); }
   });
-  $('ph-continue').addEventListener('click', () => stored && play(stored));
+  $('ph-continue').addEventListener('click', () => stored && play(stored, { resume: true }));
 
   function describe(entry) {
     const m = entry.meta || {};
@@ -58,7 +58,7 @@
   });
 
   let booted = false;
-  async function play(entry) {
+  async function play(entry, opts) {
     if (booted) {
       // EmulatorJS can't swap games in place; the seed is already stored, so
       // reload and start it straight away.
@@ -75,10 +75,10 @@
       : entry.name;
     Z1Tracker.setSession(id, label);
     document.title = describe(entry) + ' - Z1R Unified';
-    boot(new File([entry.rom], 'Z1R-' + id + '.nes'), 'Z1R-' + id);
+    boot(new File([entry.rom], 'Z1R-' + id + '.nes'), 'Z1R-' + id, id, !!(opts && opts.resume));
   }
 
-  function boot(file, gameName) {
+  function boot(file, gameName, id, resume) {
     $('placeholder').remove();
     document.body.classList.add('playing');
     Z1Seed.release();
@@ -94,11 +94,54 @@
     window.EJS_onGameStart = function () {
       if (window.EJS_emulator) window.EJS_emulator.enableMouseLock = false;
       NesBridge.invalidate();
+      startAutosave(id, resume);
     };
     const s = document.createElement('script');
     s.src = EJS_CDN + 'loader.js';
     s.onerror = () => alert('Could not load the emulator. Check your connection and reload.');
     document.body.appendChild(s);
+  }
+
+  // ── autosave ──────────────────────────────────────────────────────────────
+  // iOS closes web apps that use too much memory, and the app reopens at the
+  // start screen. Keep a snapshot of the running game (every 20 s, and when
+  // the app goes to the background) so Continue picks up where you were.
+  let autosaveKey = null;
+  function snapshotNow() {
+    const gm = window.EJS_emulator && window.EJS_emulator.gameManager;
+    if (!gm || !autosaveKey) return;
+    let st;
+    try { st = gm.getState(); } catch (e) { return; }
+    if (!st || st.length < 1024) return;
+    const copy = new Uint8Array(st).buffer;   // own buffer, not a view into the emulator
+    Z1Store.set(autosaveKey, { state: copy, t: Date.now() }).catch(() => {});
+  }
+  function startAutosave(id, resume) {
+    autosaveKey = 'resume:' + id;
+    const begin = () => {
+      setInterval(() => { if (!document.hidden) snapshotNow(); }, 20000);
+      document.addEventListener('visibilitychange', () => { if (document.hidden) snapshotNow(); });
+      window.addEventListener('pagehide', snapshotNow);
+    };
+    if (!resume) { begin(); return; }
+    Z1Store.get(autosaveKey).then((saved) => {
+      if (saved && saved.state) {
+        setTimeout(() => {
+          try {
+            window.EJS_emulator.gameManager.loadState(new Uint8Array(saved.state));
+            NesBridge.invalidate();
+            toast('Picked up where you left off');
+          } catch (e) { console.warn('[autosave] could not restore', e); }
+          begin();
+        }, 600);
+      } else begin();
+    });
+  }
+  function toast(text) {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.textContent = text; t.setAttribute('role', 'status');
+    document.body.append(t);
+    setTimeout(() => t.remove(), 3500);
   }
 
   // ── controller: indicator + auto-assign to player 1 ───────────────────────

@@ -91,6 +91,15 @@
     window.EJS_color = '#0058F8';
     window.EJS_backgroundColor = '#000000';
     window.EJS_defaultOptions = { lockMouse: 'disabled' };
+    // EmulatorJS's NES touch layout without the Fast/Slow row, so the
+    // controls take less height and the tracker gets more on phones.
+    window.EJS_VirtualGamepadSettings = [
+      { type: 'button', text: 'B', id: 'b', location: 'right', right: 75, top: 70, bold: true, input_value: 0 },
+      { type: 'button', text: 'A', id: 'a', location: 'right', right: 5, top: 70, bold: true, input_value: 8 },
+      { type: 'dpad', id: 'dpad', location: 'left', left: '50%', right: '50%', joystickInput: false, inputValues: [4, 5, 6, 7] },
+      { type: 'button', text: 'Start', id: 'start', location: 'center', left: 60, fontSize: 15, block: true, input_value: 3 },
+      { type: 'button', text: 'Select', id: 'select', location: 'center', left: -5, fontSize: 15, block: true, input_value: 2 },
+    ];
     window.EJS_onGameStart = function () {
       if (window.EJS_emulator) window.EJS_emulator.enableMouseLock = false;
       NesBridge.invalidate();

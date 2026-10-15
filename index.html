@@ -77,13 +77,14 @@
   .stat .ico { width: 18px; height: 18px; display: inline-block; flex: none; }
   .stat .ico svg, .item .ico svg, .lv svg, .ow-cell .pk svg, .room svg, .log-list .ico svg { width: 100%; height: 100%; display: block; }
 
-  .t-items { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 8px;
-    border: 2px solid var(--frame); }
-  /* No percentage padding here: Safari resolves it against the whole grid,
-     which made every item overflow on iPhone. Size the icon instead. */
-  .item { position: relative; min-width: 0; aspect-ratio: 1; background: none; border: 0; padding: 0;
-    cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .item .ico { display: block; width: 72%; aspect-ratio: 1; opacity: .2; filter: grayscale(1); }
+  /* Cell sizes come from tracker.js (fit) in pixels: no aspect-ratio or
+     percentage sizing, which iPhone Safari resolved differently and overflowed. */
+  .t-items { display: grid; grid-template-columns: repeat(var(--cols, 6), var(--item, 52px));
+    grid-auto-rows: var(--item, 52px); gap: var(--gap, 4px); padding: var(--pad, 8px);
+    border: 2px solid var(--frame); width: max-content; max-width: 100%; margin: 0 auto; }
+  .item { position: relative; width: var(--item, 52px); height: var(--item, 52px); background: none; border: 0;
+    padding: 0; cursor: pointer; display: block; }
+  .item .ico { position: absolute; inset: 14%; display: block; opacity: .2; filter: grayscale(1); }
   .item.have .ico { opacity: 1; filter: none; }
   .item:hover { background: #151515; }
   .item .badge { position: absolute; right: 1px; bottom: 0; font: 400 12px/1 var(--px); color: var(--white);
@@ -95,9 +96,9 @@
     border: 2px solid var(--cell-line); }
   .lv.done { border-color: var(--gold); }
   .lv button { background: none; border: 0; padding: 0; cursor: pointer; }
-  .lv-num { font: 600 18px/1 var(--px); color: var(--white); width: 100%; min-height: 22px; }
+  .lv-num { font: 600 18px/1 var(--px); color: var(--white); width: 100%; height: 22px; }
   .lv-num.here { color: var(--link); }
-  .lv-tri { width: min(26px, 80%); aspect-ratio: 1; }
+  .lv-tri { width: 26px; height: 26px; flex: none; }
   .lv-tri svg, .lv-mini svg { opacity: .2; filter: grayscale(1); }
   .lv-tri.have svg, .lv-mini.have svg { opacity: 1; filter: none; }
   .lv-mc { display: flex; gap: 1px; }
@@ -110,11 +111,13 @@
   .t-tabs button[aria-selected="true"] { color: var(--white); border-bottom-color: var(--life); }
 
   /* Overworld: the NES pause-screen minimap, grown up. */
-  .ow-cols, .ow-grid { display: grid; grid-template-columns: 14px repeat(16, minmax(0, 1fr)); gap: 2px; }
-  .ow-cols { font: 400 10px/1 var(--px); color: var(--gray); text-align: center; margin-bottom: 2px; }
+  .ow-cols, .ow-grid { display: grid; grid-template-columns: var(--ow-label, 14px) repeat(16, var(--ow-w, 24px));
+    gap: var(--ow-gap, 2px); justify-content: center; }
+  .ow-grid { grid-auto-rows: var(--ow-h, 17px); }
+  .ow-cols { font: 400 10px/1 var(--px); color: var(--gray); text-align: center; margin-bottom: 2px; height: 12px; }
   .ow-cols::before { content: ""; }
   .ow-row { font: 400 10px/1 var(--px); color: var(--gray); display: flex; align-items: center; }
-  .ow-cell { position: relative; aspect-ratio: 16 / 11; background: var(--cell); border: 0; padding: 0;
+  .ow-cell { position: relative; width: var(--ow-w, 24px); height: var(--ow-h, 17px); background: var(--cell); border: 0; padding: 0;
     cursor: pointer; overflow: hidden; font: 600 11px/1 var(--px); color: var(--white); }
   .ow-cell.seen { background: var(--sand); color: #000; }
   .ow-cell:hover { outline: 2px solid var(--frame-lit); outline-offset: -2px; }
@@ -139,9 +142,8 @@
   .dg-chips button[aria-pressed="true"] { border-color: var(--frame); background: var(--frame); }
   .dg-chips button.here { color: var(--link); }
   .dg-map { display: flex; justify-content: center; padding: 8px 0; }
-  .dg-grid { --room: min(36px, calc((100% - 2px * var(--cols)) / var(--cols))); display: grid; gap: 3px; width: 100%;
-    justify-content: center; }
-  .room { position: relative; aspect-ratio: 1; background: var(--frame); padding: 3px; }
+  .dg-grid { display: grid; gap: 3px; justify-content: center; }
+  .room { position: relative; width: var(--room, 30px); height: var(--room, 30px); background: var(--frame); padding: 3px; }
   .room.void { background: none; }
   .room.taken { box-shadow: inset 0 -3px 0 var(--gold); }
 
@@ -156,6 +158,36 @@
   .linkish { background: none; border: 0; color: var(--text-dim); text-decoration: underline; cursor: pointer; padding: 6px 0; }
   .linkish:hover { color: var(--white); }
 
+  /* Phones: one panel at a time, chosen with the tabs, sized to fit. */
+  #tracker:not(.compact) .tab-items { display: none; }
+  #tracker.compact { display: flex; flex-direction: column; overflow: hidden;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); }
+  #tracker.compact .t-tabs { order: -1; flex: none; margin: 0 0 6px; }
+  #tracker.compact .t-tabs button { flex: 1; padding: 8px 4px 7px; font-size: 15px; }
+  #tracker.compact .t-view { flex: 1 1 0; min-height: 0; overflow: hidden; }
+  #tracker.compact .log { overflow-y: auto; }
+  #tracker.compact .itemsp { display: flex; flex-direction: column; }
+  #tracker.compact .t-stats { padding-bottom: 5px; font-size: 15px; gap: 2px 12px; justify-content: center; }
+  #tracker.compact .stat .ico { width: 15px; height: 15px; }
+  #tracker.compact .t-levels { margin-top: 6px; }
+  #tracker.compact .lv { padding: 3px 0; gap: 2px; border-width: 1px; }
+  #tracker.compact .lv-num { font-size: 15px; height: 16px; }
+  #tracker.compact .lv-tri { width: 18px; height: 18px; }
+  #tracker.compact .lv-mini { width: 12px; height: 12px; }
+  #tracker.compact .lv-loc { font-size: 10px; min-height: 10px; }
+  #tracker.compact .item .badge { font-size: 10px; }
+  #tracker.compact .hint { display: none; }
+  #tracker.compact .ow-cell { font-size: 9px; }
+  #tracker.compact .ow-cols { height: 12px; font-size: 9px; }
+  #tracker.compact .ow-row { font-size: 9px; }
+  #tracker.compact .dg-chips { flex-wrap: nowrap; margin-bottom: 4px; gap: 3px; }
+  #tracker.compact .dg-chips button { flex: 1; padding: 6px 0; font-size: 15px; }
+  #tracker.compact .lvword { display: none; }
+  #tracker.compact .dg-map { padding: 2px 0; }
+  #tracker.compact .dg .hint { display: block; margin-top: 2px; font-size: 12px; text-align: center; }
+  #tracker.compact .t-foot { display: none; }
+  #tracker.compact[data-view="log"] .t-foot { display: flex; flex: none; margin-top: 6px; padding-top: 4px; }
+
   .picker { position: fixed; z-index: 50; background: #000; border: 2px solid var(--frame); padding: 10px;
     box-shadow: 0 0 0 4px #000; max-height: 80vh; overflow: auto; }
   .pk-head { font: 600 16px/1 var(--px); margin-bottom: 8px; }
@@ -167,7 +199,7 @@
   .pk-row button:hover, .pk-clear:hover { border-color: var(--frame-lit); }
 
   /* ── seed dialog ────────────────────────────────────── */
-  dialog { background: #000; color: var(--white); border: 2px solid var(--frame); padding: 0;
+  dialog { overflow: auto; background: #000; color: var(--white); border: 2px solid var(--frame); padding: 0;
     width: min(640px, calc(100vw - 20px)); max-height: calc(100dvh - 20px); }
   dialog::backdrop { background: rgba(0, 0, 0, .75); }
   .dlg { display: flex; flex-direction: column; }
@@ -210,36 +242,41 @@
     z-index: 60; background: #000; border: 2px solid var(--gold); padding: 10px 14px; font: 400 15px/1.2 var(--px); }
 
   /* ── phones and narrow windows ──────────────────────── */
-  @media (max-width: 900px) {
-    html, body { height: auto; overflow-x: hidden; }
-    body { display: block; width: 100%; }
-    main { display: block; width: 100%; }
-    /* While playing: taller than the picture so the touch controls sit below the game. */
-    #game-wrap { height: min(calc(100vw * 15 / 16 + 190px), 92svh); }
-    /* Nothing loaded yet: just the welcome, so the tracker is on screen too. */
-    body:not(.playing) #game-wrap { height: auto; }
-    body:not(.playing) #placeholder { position: static; padding: 28px 18px 30px; gap: 12px; }
-    #placeholder h2 { font-size: 26px; }
-    .tri-mark { width: 44px; height: 44px; }
-    aside { width: 100%; border-left: 0; border-top: 2px solid var(--frame); overflow: visible; }
-    header { gap: 8px; }
-    .brand { font-size: 18px; }
-    .pill span { font-size: 12px; }
-    #pad-status { display: none; }
+  .brand-text { display: inline; }
+  /* Phones, portrait: header, game, tracker stacked to fill exactly one screen. */
+  @media (max-width: 900px) and (orientation: portrait) {
+    html, body { height: 100%; overflow: hidden; }
+    body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+    header { flex: none; }
+    main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    /* Picture height plus the touch controls beneath it; gives way to the tracker. */
+    #game-wrap { flex: 0 1 calc(100vw * 15 / 16 + 172px); min-height: 240px; }
+    body:not(.playing) #game-wrap { flex: none; height: auto; min-height: 0; }
+    body:not(.playing) #placeholder { position: static; padding: 20px 18px 22px; gap: 10px; }
+    #placeholder h2 { font-size: 24px; }
+    #placeholder p { font-size: 14px; }
+    .tri-mark { width: 40px; height: 40px; }
+    aside { flex: 1 0 210px; min-height: 0; width: 100%; border-left: 0; border-top: 2px solid var(--frame); }
+    /* EmulatorJS leaves 50px under its touch controls for a menu bar phones
+       don't show; close that gap so the tracker gets the room. */
+    #game .ejs_virtualGamepad_parent { bottom: 0 !important; }
+    #game .ejs_virtualGamepad_left, #game .ejs_virtualGamepad_right { bottom: 40px !important; }
+    #game .ejs_virtualGamepad_bottom { bottom: 6px !important; }
   }
-  @media (max-width: 420px) {
-    header { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
-    .btn { padding: 6px 9px; font-size: 14px; }
-    aside { padding-left: 8px; padding-right: 8px; }
-    .t-stats { gap: 4px 12px; font-size: 16px; }
-    .t-items { padding: 4px; gap: 2px; }
-    .lv { padding: 5px 0 4px; gap: 2px; }
-    .lv-num { font-size: 16px; }
-    .lv-mini { width: 12px; height: 12px; }
-    .lv-loc { font-size: 11px; }
-    .t-tabs button { padding: 7px 9px 6px; font-size: 15px; }
-    .ow-cell { font-size: 9px; }
-    .ow-cols, .ow-grid { grid-template-columns: 10px repeat(16, minmax(0, 1fr)); gap: 1px; }
+  /* Phones, landscape: game left, tracker right. */
+  @media (orientation: landscape) and (max-height: 560px) {
+    main { grid-template-columns: minmax(0, 1fr) min(400px, 46vw); }
+    aside { overflow: hidden; }
+  }
+  /* Both phone layouts: a one-line header. */
+  @media (max-width: 900px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px) {
+    header { flex-wrap: nowrap; gap: 8px; padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 6px;
+      padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+    .brand { font-size: 17px; margin: 0; }
+    .brand-text { display: none; }
+    .btn { padding: 5px 9px; font-size: 14px; min-height: 32px; white-space: nowrap; }
+    .pill span { display: none; }
+    #pad-status { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .ow-cell.here::after, .room.here::after, .msg.busy::before { animation: none; }
@@ -248,7 +285,7 @@
 </head>
 <body>
 <header>
-  <h1 class="brand"><span id="brand-mark"></span>Z1R Unified</h1>
+  <h1 class="brand" aria-label="Z1R Unified"><span id="brand-mark"></span><span class="brand-text">Z1R Unified</span></h1>
   <button class="btn primary" id="new-seed" type="button">New seed</button>
   <label class="btn" for="rom-input">Play ROM file</label>
   <!-- No `accept` filter: iOS grays out .nes files it doesn't know. -->

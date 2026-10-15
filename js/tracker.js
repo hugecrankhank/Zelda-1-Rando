@@ -82,6 +82,11 @@
   let lastOW = null, prevLevel = null, curSlot = null, needBaseline = true;
   let link = 'off';           // off | waiting | live
   let view = 'ow', dgLevel = 1, dgPinned = false;
+  // Phones (and short landscape screens) show one panel at a time under the
+  // game; bigger screens stack the items above the map tabs.
+  const COMPACT = window.matchMedia('(max-width: 900px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px)');
+  const isCompact = () => COMPACT.matches;
+  if (isCompact()) view = 'items';
   const linkListeners = new Set();
   let el = {};
   let dirty = true;
@@ -252,8 +257,8 @@
 
     el.tabs = h('div', { class: 't-tabs', role: 'tablist' });
     el.tabBtns = {};
-    [['ow', 'Overworld'], ['dg', 'Dungeons'], ['log', 'Pickups']].forEach(([id, txt]) => {
-      const b = h('button', { type: 'button', role: 'tab', onclick: () => { view = id; dirty = true; render(); } }, txt);
+    [['items', 'Items'], ['ow', 'Overworld'], ['dg', 'Dungeons'], ['log', 'Pickups']].forEach(([id, txt]) => {
+      const b = h('button', { type: 'button', role: 'tab', class: 'tab-' + id, onclick: () => { view = id; dirty = true; render(); } }, txt);
       el.tabBtns[id] = b; el.tabs.append(b);
     });
 
@@ -275,7 +280,7 @@
     // Dungeons
     el.dg = h('div', { class: 't-view dg' });
     el.dgChips = h('div', { class: 'dg-chips' });
-    for (let n = 1; n <= 9; n++) el.dgChips.append(h('button', { type: 'button', onclick: () => showLevel(n) }, 'Level ' + n));
+    for (let n = 1; n <= 9; n++) el.dgChips.append(h('button', { type: 'button', 'aria-label': 'Level ' + n, onclick: () => showLevel(n) }, h('span', { class: 'lvword' }, 'Level '), String(n)));
     el.dgMap = h('div', { class: 'dg-map' });
     el.dgInfo = h('p', { class: 'hint' });
     el.dg.append(el.dgChips, el.dgMap, el.dgInfo);
@@ -288,12 +293,54 @@
       h('button', { type: 'button', class: 'linkish', onclick: resetTracker }, 'Reset tracker'));
 
     el.picker = h('div', { class: 'picker', hidden: '' });
-    root.append(el.stats, el.items, el.levels, el.tabs, el.ow, el.dg, el.log, el.foot, el.picker);
+    el.itemsPanel = h('div', { class: 't-view itemsp' }, el.stats, el.items, el.levels);
+    root.append(el.itemsPanel, el.tabs, el.ow, el.dg, el.log, el.foot, el.picker);
+    if (window.ResizeObserver) new ResizeObserver(() => { fit(); dirty = true; render(); }).observe(root);
+    COMPACT.addEventListener && COMPACT.addEventListener('change', () => {
+      if (isCompact() && view !== 'items') view = 'items';
+      dirty = true; render();
+    });
     document.addEventListener('pointerdown', (e) => {
       if (!el.picker.hidden && !el.picker.contains(e.target) && !e.target.closest('.ow-cell')) closePicker();
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePicker(); });
     dirty = true; render();
+  }
+
+  // ── sizing ───────────────────────────────────────────────────────────────
+  // Every cell gets an explicit pixel size computed from the space available.
+  // (Percentage padding / aspect-ratio grid cells size differently in iPhone
+  // Safari and overflowed their box there.)
+  function fit() {
+    if (!el.root || !el.root.clientWidth) return;
+    const compact = isCompact();
+    const W = el.root.clientWidth;
+    // Items: 9×2 on phones, 6×3 on bigger screens.
+    const cols = compact ? 9 : 6, rows = compact ? 2 : 3;
+    const pad = compact ? 4 : 8, gap = compact ? 2 : 4;
+    let item = (W - 4 - 2 * pad - gap * (cols - 1)) / cols;
+    if (compact && !el.itemsPanel.hidden) {
+      const H = el.itemsPanel.clientHeight - el.stats.offsetHeight - el.levels.offsetHeight - 6 - 4 - 2 * pad - gap * (rows - 1);
+      if (H > 0) item = Math.min(item, H / rows);
+    }
+    item = Math.max(22, Math.min(compact ? 56 : 64, Math.floor(item)));
+    el.items.style.setProperty('--item', item + 'px');
+    el.items.style.setProperty('--cols', cols);
+    el.items.style.setProperty('--pad', pad + 'px');
+    el.items.style.setProperty('--gap', gap + 'px');
+    // Overworld: 16×8 screens, each 16:11 like the game's screens.
+    if (!el.ow.hidden) {
+      const label = compact ? 10 : 14, g = compact ? 1 : 2;
+      let w = Math.floor((W - label - g * 16) / 16), hgt = Math.round(w * 11 / 16);
+      if (compact) {
+        const H = el.ow.clientHeight - 14 - g * 8;
+        if (H > 0 && hgt * 8 > H) { hgt = Math.floor(H / 8); w = Math.floor(hgt * 16 / 11); }
+      }
+      el.ow.style.setProperty('--ow-w', Math.max(8, w) + 'px');
+      el.ow.style.setProperty('--ow-h', Math.max(6, hgt) + 'px');
+      el.ow.style.setProperty('--ow-label', label + 'px');
+      el.ow.style.setProperty('--ow-gap', g + 'px');
+    }
   }
 
   // ── interactions ─────────────────────────────────────────────────────────
@@ -431,9 +478,15 @@
       c.num.closest('.lv').classList.toggle('done', !!t);
     }
 
-    // tabs
+    // panels
+    const compact = isCompact();
+    if (!compact && view === 'items') view = 'ow';
+    el.root.classList.toggle('compact', compact);
+    el.root.dataset.view = view;
     Object.entries(el.tabBtns).forEach(([id, b]) => b.setAttribute('aria-selected', String(id === view)));
+    el.itemsPanel.hidden = compact && view !== 'items';
     el.ow.hidden = view !== 'ow'; el.dg.hidden = view !== 'dg'; el.log.hidden = view !== 'log';
+    fit();
 
     if (view === 'ow') renderOverworld();
     if (view === 'dg') renderDungeon();
@@ -487,8 +540,16 @@
     rooms.forEach((x) => { c0 = Math.min(c0, x & 15); c1 = Math.max(c1, x & 15); r0 = Math.min(r0, x >> 4); r1 = Math.max(r1, x >> 4); });
     const cols = c1 - c0 + 1, rws = r1 - r0 + 1;
     const g = h('div', { class: 'dg-grid' });
-    g.style.gridTemplateColumns = 'repeat(' + cols + ', var(--room))';
-    g.style.setProperty('--cols', cols);
+    const gap = 3;
+    const availW = el.dgMap.clientWidth || el.root.clientWidth;
+    let room = Math.floor((availW - gap * (cols - 1)) / cols);
+    if (isCompact()) {
+      const availH = el.dg.clientHeight - el.dgChips.offsetHeight - 28;
+      room = Math.min(room, Math.floor((availH - gap * (rws - 1)) / rws));
+    }
+    room = Math.max(8, Math.min(36, room));
+    g.style.gridTemplateColumns = 'repeat(' + cols + ', ' + room + 'px)';
+    g.style.setProperty('--room', room + 'px');
     const base = A.WORLD + 0x80 * (n < 7 ? 1 : 2);
     const set = new Set(rooms);
     let taken = 0;
@@ -511,7 +572,7 @@
     const got = S.log.filter((e) => e.lv === n);
     if (got.length) parts.push(got.length + ' found here');
     el.dgInfo.textContent = parts.join(', ') + '.';
-    void rws; void taken;
+    void taken;
   }
 
   function renderLog() {

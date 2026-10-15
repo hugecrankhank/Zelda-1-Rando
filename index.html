@@ -49,6 +49,7 @@
   .btn.primary:hover { background: #F83800; border-color: #F83800; }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
   .spacer { flex: 1; }
+  button.pill { background: none; border: 0; padding: 6px 2px; min-height: 32px; min-width: 32px; cursor: pointer; justify-content: center; }
   .pill { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
   .pill i { width: 8px; height: 8px; background: var(--gray); display: inline-block; }
   .pill.on i { background: var(--link); }
@@ -198,6 +199,14 @@
   .pk-row button.on { background: var(--frame); border-color: var(--frame); }
   .pk-row button:hover, .pk-clear:hover { border-color: var(--frame-lit); }
 
+  /* App chrome isn't text: no selection, no iOS copy menu on long-press. */
+  header, aside, #placeholder, .btn, button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .selectable { -webkit-user-select: text; user-select: text; }
+  .pre { white-space: pre-wrap; font-size: 14px; margin: 0; }
+  .check { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+  .check input { width: 20px; height: 20px; }
+  .step .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
   /* ── seed dialog ────────────────────────────────────── */
   dialog { overflow: auto; background: #000; color: var(--white); border: 2px solid var(--frame); padding: 0;
     width: min(640px, calc(100vw - 20px)); max-height: calc(100dvh - 20px); }
@@ -293,7 +302,7 @@
   <div class="spacer"></div>
   <button class="btn" id="install-btn" type="button" hidden>Install app</button>
   <div id="pad-status" class="pill"><i></i><span>No controller</span></div>
-  <div id="link-status" class="pill"><i></i><span>No game running</span></div>
+  <button id="link-status" class="pill" type="button" aria-label="Status"><i></i><span>No game running</span></button>
 </header>
 
 <main>
@@ -369,11 +378,40 @@
   </form>
 </dialog>
 
+<dialog id="status-dlg" aria-labelledby="status-title">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="status-title">Status</h2>
+      <button class="x" value="close" aria-label="Close">×</button>
+    </div>
+    <section class="step">
+      <h3>Now</h3>
+      <p id="status-live" class="pre"></p>
+    </section>
+    <section class="step">
+      <h3>Last crash</h3>
+      <p id="status-crash" class="pre selectable"></p>
+      <div class="actions">
+        <button class="btn" type="button" id="status-copy" hidden>Copy report</button>
+        <button class="btn" type="button" id="status-clear" hidden>Clear reports</button>
+      </div>
+    </section>
+    <section class="step">
+      <h3>Test mode</h3>
+      <label class="check"><input type="checkbox" id="status-safe">
+        Play with autotracking and autosave off</label>
+      <p class="msg">If the game still crashes in test mode, the problem is the emulator itself, not the tracker.</p>
+      <p id="status-safe-note" class="msg warn" hidden>Applies to the next game you start. If a game is running, close and reopen the app, then tap Continue.</p>
+    </section>
+  </form>
+</dialog>
+
 <script src="js/icons.js"></script>
 <script src="js/store.js"></script>
 <script src="js/nes-bridge.js"></script>
 <script src="js/tracker.js"></script>
 <script src="js/seed.js"></script>
+<script src="js/diag.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

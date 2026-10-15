@@ -16,7 +16,7 @@ const EXTERNAL = [
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
     './', './index.html', './manifest.webmanifest', './js/icons.js', './js/store.js', './js/nes-bridge.js',
-    './js/tracker.js', './js/seed.js', './js/app.js',
+    './js/tracker.js', './js/seed.js', './js/diag.js', './js/app.js',
   ])).catch(() => {}));
   self.skipWaiting();
 });

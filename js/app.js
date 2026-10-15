@@ -10,6 +10,8 @@
   $('brand-mark').innerHTML = Z1Icons.svg('triforce');
   $('tri-mark').innerHTML = Z1Icons.svg('triforce');
 
+  Z1Diag.init();
+
   // ── tracker ───────────────────────────────────────────────────────────────
   Z1Tracker.init($('tracker'));
   Z1Tracker.setSession('manual', 'No game running: tap items to track by hand.');
@@ -76,6 +78,7 @@
       ? 'Seed ' + entry.meta.seed + ' (ZORA ' + (entry.meta.version || '') + ')'
       : entry.name;
     Z1Tracker.setSession(id, label);
+    Z1Diag.start(label);
     document.title = describe(entry) + ' - Z1R Unified';
     boot(new File([entry.rom], 'Z1R-' + id + '.nes'), 'Z1R-' + id, id, !!(opts && opts.resume));
   }
@@ -105,6 +108,12 @@
     window.EJS_onGameStart = function () {
       if (window.EJS_emulator) window.EJS_emulator.enableMouseLock = false;
       NesBridge.invalidate();
+      if (Z1Diag.safe) {
+        // Test mode: nothing of ours touches the emulator while it runs.
+        NesBridge.ram = () => null;
+        toast('Test mode: autotracking and autosave are off');
+        return;
+      }
       startAutosave(id, resume);
     };
     const s = document.createElement('script');

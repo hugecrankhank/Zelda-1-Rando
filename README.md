@@ -26,12 +26,37 @@ workflow publishes it to GitHub Pages, which lets you play from any device.
 
 ```
 index.html
-├── EmulatorJS (FCEUmm core, from cdn.emulatorjs.org)
-├── js/nes-bridge.js   ← finds the NES's 2 KB RAM inside the emulator
-├── js/tracker.js      ← items, levels, overworld + dungeon maps, pickup log
-├── js/seed.js         ← "New seed" dialog
-└── zora/seed-worker.js  ← ZORA randomizer, in Pyodide, in a Web Worker
+├── emu/                 the NES emulator (same design as ALTTPR Snes9x's)
+│   ├── fceumm.wasm      libretro FCEUmm + core/frontend.c, clang + wasi-libc (no Emscripten)
+│   ├── core.js          loads the wasm (minimal WASI shim)
+│   ├── player.js        game box: on-screen controller, top bar, menu, saves
+│   ├── video.js         WebGL2 shader runner (6xBRZ, 4xBRZ, sharp, smooth, CRT)
+│   └── audio.js         AudioWorklet output with drift correction
+├── js/nes-bridge.js     the tracker's live view of the NES's 2 KB RAM
+├── js/tracker.js        items, levels, overworld + dungeon maps, pickup log
+├── js/seed.js           "New seed" dialog
+├── js/diag.js           crash recorder and status panel
+└── zora/seed-worker.js  ZORA randomizer, in Pyodide, in a Web Worker
 ```
+
+**Emulator.** FCEUmm, compiled to WebAssembly with a few kilobytes of glue
+(`core/frontend.c`) instead of running inside EmulatorJS/RetroArch. It uses
+about a quarter of the memory, and the core reports where it keeps the NES's
+RAM, so the tracker reads live memory directly. The player (`emu/player.js`,
+`video.js`, `audio.js`, `input.js`, shaders) comes from ALTTPR Snes9x, adapted
+for the NES's two buttons: on-screen controller under the picture on phones,
+a top bar with pause, fast-forward and four save-state slots (F5 / F8), and a
+menu (⋯) for volume, filter, aspect ratio, controller size and remapping.
+In-game saves are kept per ROM; the running game is also snapshotted every
+20 s so **Continue** resumes where you were if the app is closed.
+
+Rebuild the core (optional, `emu/fceumm.wasm` is committed):
+
+```bash
+SYSROOT=/path/to/wasi-sysroot BUILTINS=/path/to/libclang_rt.builtins-wasm32.a sh core/build.sh
+```
+
+wasi-sdk provides both; `core/build.sh` clones FCEUmm at the pinned commit.
 
 **Seeds.** [ZORA](https://github.com/tetraly/zora) (MIT, by Tetra) is a
 Python Zelda 1 randomizer. Its wheel is bundled in `zora/` and runs in the
@@ -41,12 +66,7 @@ extras string and every individual flag are available; the file-select code
 and spoiler log come with each seed. Your base ROM and the seed you're playing
 are kept in this browser (IndexedDB), never uploaded.
 
-**Autotracking.** EmulatorJS doesn't export the core's memory, but its save
-states do: FCEUmm stores CPU RAM as a tagged `RAM` block. The bridge takes one
-state, finds that block, then searches the emulator's heap for the same 2 KB.
-From then on reads are direct views into live memory; it re-checks every few
-seconds and relocates if needed, falling back to throttled snapshots if the
-search fails. From RAM the tracker reads:
+**Autotracking.** From the NES's RAM the tracker reads:
 
 - inventory ($0657–$0676), hearts, rupees, keys, bombs and bomb capacity
 - triforce pieces, maps and compasses per level
@@ -65,7 +85,7 @@ each ROM gets its own battery save, so seeds never overwrite each other.
 ## Debugging
 
 ```js
-NesBridge.status()          // mode: 'live' | 'snapshot' | 'idle'
+NesBridge.status()          // mode: 'live' | 'idle'
 NesBridge.peek(0x657, 32)   // dump inventory bytes
 Z1Tracker._state()          // tracker data for this seed
 ```
@@ -80,8 +100,7 @@ seeds with the seed, flags and spoiler log in the ZORA Discord.
 
 ## Known limits
 
-- **FCEUmm core only.** The bridge parses FCEUmm's state format.
-- **Changing games reloads the page.** EmulatorJS can't swap games in place.
+- **Changing games reloads the page.** The player runs one game per load.
   The new seed is stored first and starts right after the reload.
 - **iPhone can close the app when memory runs low.** The randomizer is
   unloaded once a game starts, and the running game is snapshotted every 20 s
@@ -95,6 +114,7 @@ seeds with the seed, flags and spoiler log in the ZORA Discord.
 - Randomizer: [ZORA](https://github.com/tetraly/zora) by Tetra, MIT License
   (see `zora/LICENSE`). `zora/seed-worker.js` is adapted from its web worker.
 - RAM map: [aldonunez/zelda1-disassembly](https://github.com/aldonunez/zelda1-disassembly).
-- Emulator: [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) (GPL-3.0)
-  with libretro FCEUmm, loaded from its CDN at runtime.
+- Emulator: [libretro FCEUmm](https://github.com/libretro/libretro-fceumm)
+  (GPL-2.0, `core/LICENSES/`); player from ALTTPR Snes9x; shaders from
+  [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders) (each file's header).
 - No ROMs are included. Use your own legally obtained copy.

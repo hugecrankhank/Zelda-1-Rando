@@ -1,13 +1,12 @@
 /*
  * Service worker: makes the site installable and lets it open offline.
  * Network-first for this site's own files (updates show up as soon as you're
- * online); the cache is a fallback. The emulator, Pyodide and fonts are cached
+ * online); the cache is a fallback. Pyodide and fonts are cached
  * as they load, so once you've played and rolled a seed online, both work
  * without a connection.
  */
-const CACHE = 'z1r-unified-v2';
+const CACHE = 'z1r-unified-v3';
 const EXTERNAL = [
-  'https://cdn.emulatorjs.org/',
   'https://cdn.jsdelivr.net/pyodide/',
   'https://fonts.googleapis.com/',
   'https://fonts.gstatic.com/',
@@ -17,6 +16,8 @@ self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
     './', './index.html', './manifest.webmanifest', './js/icons.js', './js/store.js', './js/nes-bridge.js',
     './js/tracker.js', './js/seed.js', './js/diag.js', './js/app.js',
+    './emu/core.js', './emu/video.js', './emu/audio.js', './emu/audio-worklet.js', './emu/input.js', './emu/player.js',
+    './emu/fceumm.wasm', './emu/shaders/stock.glsl', './emu/shaders/6xbrz.glsl',
   ])).catch(() => {}));
   self.skipWaiting();
 });

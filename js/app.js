@@ -1,11 +1,10 @@
 /*
- * app.js — wires the page together: EmulatorJS (FCEUmm core) boot, ROM
+ * app.js — wires the page together: the emulator (emu/, FCEUmm) boot, ROM
  * loading, the tracker session, controller and audio fixes, and the PWA bits.
  */
 (function () {
   'use strict';
-  const EJS_CDN = 'https://cdn.emulatorjs.org/stable/data/';
-  const $ = (id) => document.getElementById(id);
+    const $ = (id) => document.getElementById(id);
 
   $('brand-mark').innerHTML = Z1Icons.svg('triforce');
   $('tri-mark').innerHTML = Z1Icons.svg('triforce');
@@ -19,7 +18,7 @@
     const el = $('link-status');
     el.className = 'pill' + (s === 'live' ? ' on' : s === 'waiting' ? ' wait' : '');
     const b = window.NesBridge && NesBridge.status();
-    el.title = s === 'live' && b ? 'Autotracking: ' + (b.direct ? 'direct RAM' : b.mode === 'live' ? 'located RAM' : 'snapshots') : '';
+    
     el.querySelector('span').textContent =
       s === 'live' ? 'Autotracking' : s === 'waiting' ? (window.EJS_emulator ? 'Waiting for a save file' : 'Starting…') : 'No game running';
   });
@@ -64,7 +63,7 @@
   let booted = false;
   async function play(entry, opts) {
     if (booted) {
-      // EmulatorJS can't swap games in place; the seed is already stored, so
+      // The player runs one game per page load; the seed is already stored, so
       // reload and start it straight away.
       if (!confirm('Switch to ' + describe(entry) + '? The current game closes; its save stays in this browser.')) return;
       await Z1Store.set('current', { bytes: entry.rom.buffer.slice(0), name: entry.name, meta: entry.meta }).catch(() => {});
@@ -83,30 +82,22 @@
     boot(new File([entry.rom], 'Z1R-' + id + '.nes'), 'Z1R-' + id, id, !!(opts && opts.resume));
   }
 
+  // The NES runs on our own build of FCEUmm (emu/), the same setup as
+  // ALTTPR Snes9x: no EmulatorJS. The player publishes window.EJS_emulator
+  // (getState/loadState, pause, volume) and calls EJS_onGameStart.
+  const COMPACT_Q = window.matchMedia('(max-width: 900px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px)');
+  function placeControls() {
+    // Phones: the on-screen controller goes under (or beside) the picture,
+    // so it never covers the game.
+    if (window.EmuPlayer) EmuPlayer.setTouchPlacement(COMPACT_Q.matches ? 'outside' : 'overlay');
+  }
+  if (COMPACT_Q.addEventListener) COMPACT_Q.addEventListener('change', placeControls);
+
   function boot(file, gameName, id, resume) {
     $('placeholder').remove();
     document.body.classList.add('playing');
     Z1Seed.release();
-    window.EJS_player = '#game';
-    window.EJS_core = 'fceumm';          // the bridge reads FCEUmm's state format
-    window.EJS_pathtodata = EJS_CDN;
-    window.EJS_gameUrl = file;
-    window.EJS_gameName = gameName;      // one battery save per ROM, so seeds never overwrite each other
-    window.EJS_startOnLoaded = true;
-    window.EJS_color = '#0058F8';
-    window.EJS_backgroundColor = '#000000';
-    window.EJS_defaultOptions = { lockMouse: 'disabled' };
-    // EmulatorJS's NES touch layout without the Fast/Slow row, so the
-    // controls take less height and the tracker gets more on phones.
-    window.EJS_VirtualGamepadSettings = [
-      { type: 'button', text: 'B', id: 'b', location: 'right', right: 75, top: 70, bold: true, input_value: 0 },
-      { type: 'button', text: 'A', id: 'a', location: 'right', right: 5, top: 70, bold: true, input_value: 8 },
-      { type: 'dpad', id: 'dpad', location: 'left', left: '50%', right: '50%', joystickInput: false, inputValues: [4, 5, 6, 7] },
-      { type: 'button', text: 'Start', id: 'start', location: 'center', left: 60, fontSize: 15, block: true, input_value: 3 },
-      { type: 'button', text: 'Select', id: 'select', location: 'center', left: -5, fontSize: 15, block: true, input_value: 2 },
-    ];
     window.EJS_onGameStart = function () {
-      if (window.EJS_emulator) window.EJS_emulator.enableMouseLock = false;
       NesBridge.invalidate();
       if (Z1Diag.safe) {
         // Test mode: nothing of ours touches the emulator while it runs.
@@ -116,10 +107,9 @@
       }
       startAutosave(id, resume);
     };
-    const s = document.createElement('script');
-    s.src = EJS_CDN + 'loader.js';
-    s.onerror = () => alert('Could not load the emulator. Check your connection and reload.');
-    document.body.appendChild(s);
+    placeControls();
+    EmuPlayer.boot('#game', file).catch((e) => console.error('[app] emulator failed', e));
+    placeControls();
   }
 
   // ── autosave ──────────────────────────────────────────────────────────────
@@ -164,19 +154,9 @@
     setTimeout(() => t.remove(), 3500);
   }
 
-  // ── controller: indicator + auto-assign to player 1 ───────────────────────
-  // EmulatorJS only assigns a pad from its own "connected" event, which can
-  // fire before it listens. Assign the first pad ourselves when that happens.
+  // ── controller indicator (the player reads gamepads itself) ──────────────
   function pads() {
     try { return Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean); } catch (e) { return []; }
-  }
-  function assignPad() {
-    const ejs = window.EJS_emulator;
-    const sel = ejs && ejs.frontend && ejs.frontend.gamepadSelection;
-    const known = ejs && ejs.gamepad && ejs.gamepad.gamepads;
-    if (!sel || !known || !known.length || sel.some(Boolean)) return;
-    sel[0] = known[0].id + '_' + known[0].index;
-    try { ejs.frontend.updateGamepadLabels(); } catch (e) {}
   }
   function paintPad() {
     const el = $('pad-status'), list = pads();
@@ -184,34 +164,8 @@
     el.title = list.length ? list[0].id : 'Connect a controller, then press any button on it';
     el.querySelector('span').textContent = list.length ? 'Controller connected' : 'No controller';
   }
-  setInterval(() => { paintPad(); assignPad(); }, 500);
-  window.addEventListener('gamepadconnected', () => { paintPad(); assignPad(); });
-
-  // ── volume that works on iPhone/iPad (same fix as ALTTPR Unified) ─────────
-  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
-  function applyVolume() {
-    const ejs = window.EJS_emulator;
-    const ctx = ejs && ejs.Module && ejs.Module.AL && ejs.Module.AL.currentCtx;
-    if (!ctx || !ctx.gain) return;
-    const v = ejs.muted ? 0 : (typeof ejs.volume === 'number' ? ejs.volume : 0.5);
-    if (ctx.gain.gain.value !== v) ctx.gain.gain.value = v;
-    (ctx.sources || []).forEach((s) => { if (s && s.gain && s.gain.gain.value !== 1) s.gain.gain.value = 1; });
-    if (ctx.audioCtx && ctx.audioCtx.state === 'suspended') { try { ctx.audioCtx.resume(); } catch (e) {} }
-  }
-  function hookVolume() {
-    const ejs = window.EJS_emulator;
-    if (!ejs || ejs.__volHooked || typeof ejs.setVolume !== 'function') return;
-    const orig = ejs.setVolume.bind(ejs);
-    ejs.setVolume = (v) => { orig(v); applyVolume(); };
-    ejs.__volHooked = true;
-  }
-  setInterval(() => { hookVolume(); applyVolume(); }, 500);
-  ['touchend', 'click'].forEach((t) => document.addEventListener(t, () => setTimeout(applyVolume, 50), true));
-
-  // Zelda never uses a mouse: never let the canvas grab the pointer.
-  ['requestPointerLock', 'mozRequestPointerLock', 'webkitRequestPointerLock'].forEach((k) => {
-    if (Element.prototype[k]) Element.prototype[k] = () => Promise.resolve();
-  });
+  setInterval(paintPad, 1000);
+  window.addEventListener('gamepadconnected', paintPad);
 
   // ── installable app ───────────────────────────────────────────────────────
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {

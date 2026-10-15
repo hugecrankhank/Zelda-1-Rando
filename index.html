@@ -258,19 +258,15 @@
     body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
     header { flex: none; }
     main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-    /* Picture height plus the touch controls beneath it; gives way to the tracker. */
-    #game-wrap { flex: 0 1 calc(100vw * 15 / 16 + 172px); min-height: 240px; }
+    /* Picture (8:7, so 7/8 of the width tall) plus the on-screen controller
+       under it; gives way to the tracker on short screens. */
+    #game-wrap { flex: 0 1 calc(100vw * 7 / 8 + 200px); min-height: 280px; }
     body:not(.playing) #game-wrap { flex: none; height: auto; min-height: 0; }
     body:not(.playing) #placeholder { position: static; padding: 20px 18px 22px; gap: 10px; }
     #placeholder h2 { font-size: 24px; }
     #placeholder p { font-size: 14px; }
     .tri-mark { width: 40px; height: 40px; }
     aside { flex: 1 0 210px; min-height: 0; width: 100%; border-left: 0; border-top: 2px solid var(--frame); }
-    /* EmulatorJS leaves 50px under its touch controls for a menu bar phones
-       don't show; close that gap so the tracker gets the room. */
-    #game .ejs_virtualGamepad_parent { bottom: 0 !important; }
-    #game .ejs_virtualGamepad_left, #game .ejs_virtualGamepad_right { bottom: 40px !important; }
-    #game .ejs_virtualGamepad_bottom { bottom: 6px !important; }
   }
   /* Phones, landscape: game left, tracker right. */
   @media (orientation: landscape) and (max-height: 560px) {
@@ -406,6 +402,11 @@
   </form>
 </dialog>
 
+<script src="emu/core.js"></script>
+<script src="emu/video.js"></script>
+<script src="emu/audio.js"></script>
+<script src="emu/input.js"></script>
+<script src="emu/player.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/store.js"></script>
 <script src="js/nes-bridge.js"></script>

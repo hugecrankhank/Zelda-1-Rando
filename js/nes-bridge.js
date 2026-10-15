@@ -1,173 +1,36 @@
 /*
- * nes-bridge.js — reads the NES's 2 KB work RAM straight out of EmulatorJS.
+ * nes-bridge.js — the tracker's view of the NES's 2 KB RAM.
  *
- * Same idea as ALTTPR Unified's SNES bridge: EmulatorJS doesn't export the
- * core's memory pointer, but gameManager.getState() returns an FCEUmm save
- * state, which stores CPU RAM as an SFORMAT entry: "RAM\0", a 32-bit LE size
- * (0x800), then the 2048 bytes. We take one snapshot, find that block, then
- * search the WASM heap for the same 2 KB. After that every read is a direct
- * view into live memory. It re-verifies periodically, relocates if the core
- * moved its buffer, and falls back to throttled snapshots if the heap search
- * fails.
+ * The emulator is our own FCEUmm build (emu/), which reports where it keeps
+ * system RAM, so every read is a direct view into live memory: no save
+ * states, no searching. (The EmulatorJS version had to find RAM by taking a
+ * save state and searching the heap for it.)
  *
  * window.NesBridge:
- *   ram()        → Uint8Array(2048) view (live) or copy (snapshot), or null
- *   status()     → {running, mode: 'idle'|'live'|'snapshot', ptr}
- *   invalidate() → forget the pointer (call when a game starts)
+ *   ram()        → Uint8Array(2048) live view, or null when no game is running
+ *   status()     → {running, mode: 'idle'|'live', direct}
+ *   invalidate() → no-op, kept for the app's game-start hook
  *   peek(addr, n)→ hex dump helper for the console
  */
 (function () {
   'use strict';
+  const listeners = new Set();
 
-  const RAM_SIZE = 0x800;
-  // SFORMAT entry header for RAM: desc "RAM\0" + size 0x00000800 (LE).
-  const TAG = [0x52, 0x41, 0x4D, 0x00, 0x00, 0x08, 0x00, 0x00];
-  // Save states are only taken to find RAM, never to read it: some EmulatorJS
-  // builds don't free the state buffer, so frequent snapshots leak memory and
-  // iOS eventually closes the app.
-  const SNAPSHOT_MIN_MS = 1500;      // fallback mode only
-  const VERIFY_EVERY_MS = 60000;     // heap-search mode: rare sanity check
-  const RELOCATE_EVERY_MS = 30000;   // fallback mode: retry going live
-
-  const st = { ptr: -1, mode: 'idle', snap: null, snapAt: 0, lastVerify: 0, listeners: new Set() };
-
-  function gm() { const e = window.EJS_emulator; return e && e.gameManager ? e.gameManager : null; }
-  function heap() { const g = gm(); return g && g.Module && g.Module.HEAPU8 ? g.Module.HEAPU8 : null; }
-
-  function findTag(buf) {
-    outer:
-    for (let i = 0; i <= buf.length - TAG.length - RAM_SIZE; i++) {
-      if (buf[i] !== 0x52) continue;
-      for (let j = 1; j < TAG.length; j++) if (buf[i + j] !== TAG[j]) continue outer;
-      return i + TAG.length;
-    }
-    return -1;
+  function core() {
+    const e = window.EJS_emulator;
+    const c = e && e.core;
+    return c && c.loaded ? c : null;
   }
-
-  function snapshot() {
-    const g = gm();
-    if (!g) return null;
-    let s;
-    try { s = g.getState(); } catch (e) { return null; }
-    if (!s) return null;
-    const buf = s instanceof Uint8Array ? s : new Uint8Array(s.buffer || s);
-    const at = findTag(buf);
-    return at < 0 ? null : buf.slice(at, at + RAM_SIZE);
-  }
-
-  // A window of RAM with many distinct values, so the search doesn't lock
-  // onto zero-filled or repeating stretches. NES RAM is small and can be
-  // sparse early on; accept a lower bar if nothing better exists.
-  function pickNeedle(ram) {
-    let best = 0, bestN = -1;
-    for (let off = 0; off + 48 <= RAM_SIZE; off += 16) {
-      const seen = new Set();
-      for (let k = 0; k < 48; k++) seen.add(ram[off + k]);
-      if (seen.size > bestN) { bestN = seen.size; best = off; }
-      if (seen.size >= 24) break;
-    }
-    return { off: best, distinct: bestN };
-  }
-
-  function emit() { const s = status(); st.listeners.forEach((fn) => { try { fn(s); } catch (e) {} }); }
-
-  // Newer EmulatorJS cores export get_memory_data, which reports where the
-  // core keeps system RAM. Call the core directly (not EmulatorJS's JS wrapper,
-  // which frees a buffer it doesn't own). No save state needed at all.
-  function locateDirect() {
-    const g = gm(), M = g && g.Module;
-    if (!M || typeof M._get_memory_data !== 'function' || typeof M.ccall !== 'function') return false;
-    try {
-      const info = M.ccall('get_memory_data', 'string', ['string'], ['RETRO_MEMORY_SYSTEM_RAM']);
-      const parts = String(info || '').split('|');
-      const size = parseInt(parts[0], 10), ptr = parseInt(parts[1], 10);
-      if (size >= RAM_SIZE && ptr > 0 && heap() && ptr + RAM_SIZE <= heap().length) {
-        st.ptr = ptr; st.mode = 'live'; st.direct = true; st.lastVerify = performance.now();
-        console.log('[nes-bridge] RAM from the core at 0x' + ptr.toString(16));
-        emit();
-        return true;
-      }
-    } catch (e) { console.warn('[nes-bridge] get_memory_data unavailable', e); }
-    return false;
-  }
-
-  function locate() {
-    if (locateDirect()) return true;
-    st.direct = false;
-    const ram = snapshot(), h = heap();
-    if (!ram || !h) return false;
-    st.snap = ram; st.snapAt = performance.now(); st.lastVerify = st.snapAt;
-    const { off, distinct } = pickNeedle(ram);
-    const hits = [];
-    if (distinct >= 8) {
-      const b0 = ram[off];
-      for (let i = off; i <= h.length - (RAM_SIZE - off); i++) {
-        if (h[i] !== b0) continue;
-        let ok = true;
-        for (let k = 1; k < 48; k++) if (h[i + k] !== ram[off + k]) { ok = false; break; }
-        if (!ok) continue;
-        const base = i - off;
-        // Skip the serialized state itself (preceded by the RAM tag).
-        if (base >= TAG.length) {
-          let tagged = true;
-          for (let t = 0; t < TAG.length; t++) if (h[base - TAG.length + t] !== TAG[t]) { tagged = false; break; }
-          if (tagged) continue;
-        }
-        let full = true;
-        for (let k = 0; k < RAM_SIZE; k++) if (h[base + k] !== ram[k]) { full = false; break; }
-        if (full) hits.push(base);
-        if (hits.length > 3) break;
-      }
-    }
-    if (hits.length) {
-      st.ptr = hits[0]; st.mode = 'live';
-      console.log('[nes-bridge] RAM located at heap 0x' + st.ptr.toString(16) +
-                  (hits.length > 1 ? ' (' + hits.length + ' candidates)' : ''));
-    } else {
-      st.ptr = -1; st.mode = 'snapshot';
-    }
-    emit();
-    return true;
-  }
-
-  function verify() {
-    if (st.direct) return;            // the core told us where RAM is
-    const now = performance.now();
-    if (now - st.lastVerify < VERIFY_EVERY_MS) return;
-    st.lastVerify = now;
-    const ram = snapshot(), h = heap();
-    if (!ram || !h) return;
-    // The NMI handler can change a few bytes between the snapshot and this
-    // check only if the core ran in between — it doesn't, same JS tick — so
-    // any mismatch means the pointer is stale.
-    for (let k = 0; k < RAM_SIZE; k += 64) {
-      if (h[st.ptr + k] !== ram[k] || h[st.ptr + k + 31] !== ram[k + 31]) {
-        console.warn('[nes-bridge] live pointer went stale, relocating');
-        locate();
-        return;
-      }
-    }
-  }
-
   function ram() {
-    if (!gm()) return null;
-    if (st.mode === 'idle' && !locate()) return null;
-    if (st.mode === 'live') {
-      verify();
-      const h = heap();
-      if (st.mode === 'live' && h) return h.subarray(st.ptr, st.ptr + RAM_SIZE);
-    }
-    const now = performance.now();
-    if (now - st.snapAt > SNAPSHOT_MIN_MS) {
-      const s = snapshot();
-      if (s) { st.snap = s; st.snapAt = now; }
-      if (st.mode === 'snapshot' && now - st.lastVerify > RELOCATE_EVERY_MS) locate();  // try to go live
-    }
-    return st.snap;
+    const c = core();
+    if (!c) return null;
+    const r = c.wram();
+    return r.length >= 0x800 ? r : null;
   }
-
-  function status() { return { running: !!gm(), mode: st.mode, direct: !!st.direct, ptr: st.ptr }; }
-  function invalidate() { st.ptr = -1; st.mode = 'idle'; st.direct = false; st.snap = null; emit(); }
+  function status() {
+    const live = !!ram();
+    return { running: !!core(), mode: live ? 'live' : 'idle', direct: live };
+  }
   function peek(addr, n) {
     const r = ram(); if (!r) return 'no RAM';
     const out = [];
@@ -175,6 +38,9 @@
     return out.join(' ');
   }
 
-  window.NesBridge = { ram, status, invalidate, peek, onStatus: (fn) => st.listeners.add(fn),
-    _findTag: findTag };   // exposed for tests
+  window.NesBridge = {
+    ram, status, peek,
+    invalidate() { const s = status(); listeners.forEach((fn) => { try { fn(s); } catch (e) {} }); },
+    onStatus: (fn) => listeners.add(fn),
+  };
 })();

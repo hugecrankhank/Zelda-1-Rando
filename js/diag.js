@@ -10,7 +10,7 @@
  *
  * Test mode (?safe or the toggle in the panel) runs the emulator with the
  * tracker's RAM reading and autosave off, to tell whether a crash comes from
- * EmulatorJS itself or from this app.
+ * the emulator itself or from the tracker.
  */
 (function () {
   'use strict';
@@ -31,9 +31,9 @@
   let session = null, getStates = 0, peakHeap = 0, firstHeap = 0;
 
   function wasmMB() {
-    const gm = window.EJS_emulator && window.EJS_emulator.gameManager;
-    const h = gm && gm.Module && gm.Module.HEAPU8;
-    return h ? +(h.length / 1048576).toFixed(1) : 0;
+    const c = window.EJS_emulator && window.EJS_emulator.core;
+    const m = c && c.memory;
+    return m ? +(m.buffer.byteLength / 1048576).toFixed(1) : 0;
   }
   function jsMB() {
     const m = performance.memory;
@@ -54,7 +54,7 @@
       playing: !!session, clean: false, label: session && session.label, start: session && session.start,
       last: Date.now(), minutes: session ? +((Date.now() - session.start) / 60000).toFixed(1) : 0,
       wasmMB: heap, firstWasmMB: firstHeap, peakWasmMB: peakHeap, jsMB: jsMB(),
-      tracking: isSafe() ? 'off (test mode)' : b.direct ? 'direct RAM' : b.mode === 'live' ? 'located RAM' : b.mode || 'idle',
+      tracking: isSafe() ? 'off (test mode)' : b.direct ? 'direct RAM' : b.mode || 'idle',
       saveStates: getStates, hidden: document.hidden, ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''),
     };
   }

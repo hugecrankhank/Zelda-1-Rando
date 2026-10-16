@@ -5,7 +5,7 @@
  * as they load, so once you've played and rolled a seed online, both work
  * without a connection.
  */
-const CACHE = 'z1r-unified-v3';
+const CACHE = 'z1r-unified-v4';
 const EXTERNAL = [
   'https://cdn.jsdelivr.net/pyodide/',
   'https://fonts.googleapis.com/',
@@ -14,7 +14,7 @@ const EXTERNAL = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
-    './', './index.html', './manifest.webmanifest', './js/icons.js', './js/store.js', './js/nes-bridge.js',
+    './', './index.html', './manifest.webmanifest', './js/icons.js', './js/store.js', './js/nes-bridge.js', './js/owmap.js',
     './js/tracker.js', './js/seed.js', './js/diag.js', './js/app.js',
     './emu/core.js', './emu/video.js', './emu/audio.js', './emu/audio-worklet.js', './emu/input.js', './emu/player.js',
     './emu/fceumm.wasm', './emu/shaders/stock.glsl', './emu/shaders/6xbrz.glsl',

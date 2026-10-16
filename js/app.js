@@ -77,6 +77,7 @@
       ? 'Seed ' + entry.meta.seed + ' (ZORA ' + (entry.meta.version || '') + ')'
       : entry.name;
     Z1Tracker.setSession(id, label);
+    Z1Tracker.setRom(entry.rom);
     Z1Diag.start(label);
     document.title = describe(entry) + ' - Z1R Unified';
     boot(new File([entry.rom], 'Z1R-' + id + '.nes'), 'Z1R-' + id, id, !!(opts && opts.resume));

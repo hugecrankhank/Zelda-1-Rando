@@ -66,6 +66,24 @@ extras string and every individual flag are available; the file-select code
 and spoiler log come with each seed. Your base ROM and the seed you're playing
 are kept in this browser (IndexedDB), never uploaded.
 
+**Tracker.** Laid out like [Z-Tracker](https://github.com/Stevie-O/ZTracker):
+
+- **Dungeon item area:** each level's number (gray until you find its
+  entrance), triforce, map and compass, and item boxes: red while empty,
+  green with the item once you get it there.
+- **Other item area:** the wood, white and magical sword caves, the letter
+  cave, the coast and armos items, and the four take-any hearts.
+- **Overworld:** the seed's own map, drawn from the ROM you're playing
+  (`js/owmap.js`), so mixed-quest and other changed overworlds look right.
+  It starts fully lit; each screen fades once you've walked it. Every
+  screen with an entrance has a check indicator: a dot while unvisited
+  (green: you can open it now, red: you need bombs, a candle, the bracelet,
+  raft, ladder or recorder first), a gold ring when you've been in but left
+  its item behind, and a check mark when it's done. Once you've been in, the
+  tile shows what's there (level number, sword, take-any, a shop's wares...).
+  Tap a screen for a magnified view and to label it by hand. The **Spots**
+  box hides the entrance dots if you'd rather find them yourself.
+
 **Autotracking.** From the NES's RAM the tracker reads:
 
 - inventory ($0657–$0676), hearts, rupees, keys, bombs and bomb capacity
@@ -111,6 +129,10 @@ seeds with the seed, flags and spoiler log in the ZORA Discord.
 
 ## Credits
 
+- Tracker layout inspired by [Z-Tracker](https://github.com/Stevie-O/ZTracker) (no code
+  or images used). Overworld table offsets and entrance types from ZORA's
+  `zora/rom/vanilla_overworld/` and `zora/model/overworld.py` (MIT); NES
+  palette from [cynes](https://github.com/Youlixx/cynes) (MIT, via ZORA).
 - Randomizer: [ZORA](https://github.com/tetraly/zora) by Tetra, MIT License
   (see `zora/LICENSE`). `zora/seed-worker.js` is adapted from its web worker.
 - RAM map: [aldonunez/zelda1-disassembly](https://github.com/aldonunez/zelda1-disassembly).

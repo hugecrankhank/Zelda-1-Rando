@@ -17,7 +17,7 @@
   'use strict';
 
   const HDR = 0x10;
-  const PRG = {
+  const PRG0 = {
     LEVEL_BLOCK_OW: 0x18400,      // six $80-byte tables A-F
     LEVEL_INFO_OW: 0x19300,       // palettes transfer buffer first
     ROOM_LAYOUTS_OW: 0x15418,     // 121 layouts x 16 column descriptors
@@ -29,6 +29,7 @@
     CHR_MISC: 36479,              // $E0 bytes  -> BG tiles $F2-$FF
   };
   const LAYOUTS = 121, ROWS = 11, COLS = 16;
+  let PRG = PRG0;
 
   // The NES (2C02) palette, $00-$3F. From cynes (MIT, Combey Theo), via ZORA's
   // zora_export/nes_palette.py; see THIRD-PARTY in README.
@@ -80,20 +81,44 @@
       if (rom.length - base < 0x20000) return null;
       const at = (prg) => base + prg;
       const bytes = (prg, n) => rom.subarray(at(prg), at(prg) + n);
+      // Follow the pointers the game itself uses to find its tables, in case
+      // the randomizer moved them: LevelBlockAddrsQ1 / LevelInfoAddrs (bank 6
+      // $8000 / $8014), RoomLayoutsOWAddr / ColumnHeapOWAddr (bank 5 $9F9C /
+      // $9F9E). Fall back to the usual places if a pointer looks wrong.
+      const ptr = (bank, prg, fallback) => {
+        const v = rom[at(prg)] | (rom[at(prg) + 1] << 8);
+        return v >= 0x8000 && v < 0xC000 ? bank * 0x4000 + (v - 0x8000) : fallback;
+      };
+      PRG = Object.assign({}, PRG0, {
+        LEVEL_BLOCK_OW: ptr(6, 0x18000, PRG0.LEVEL_BLOCK_OW),
+        LEVEL_INFO_OW: ptr(6, 0x18014, PRG0.LEVEL_INFO_OW),
+        ROOM_LAYOUTS_OW: ptr(5, 0x15F9C, PRG0.ROOM_LAYOUTS_OW),
+      });
+      const heap0 = rom[at(0x15F9E)] | (rom[at(0x15F9E) + 1] << 8);
+      const where = { block: PRG.LEVEL_BLOCK_OW, info: PRG.LEVEL_INFO_OW, layouts: PRG.ROOM_LAYOUTS_OW, heap0 };
 
-      const block = bytes(PRG.LEVEL_BLOCK_OW, 6 * 0x80);
-      const info = bytes(PRG.LEVEL_INFO_OW, 0xFC);
+      // Copies, so the game's live tables can replace them (applyLive).
+      const block = bytes(PRG.LEVEL_BLOCK_OW, 6 * 0x80).slice();
+      let info = bytes(PRG.LEVEL_INFO_OW, 0xFC);
       // LevelInfo starts with the palettes' PPU transfer header: $3F00, 32 bytes.
-      if (info[0] !== 0x3F || info[1] !== 0x00 || info[2] !== 0x20) return null;
-      const bgPal = Array.from(info.subarray(3, 3 + 16)).map((c) => NES[c & 0x3F]);
+      const okInfo = (i) => i[0] === 0x3F && i[1] === 0x00 && i[2] === 0x20;
+      if (!okInfo(info)) { info = bytes(PRG0.LEVEL_INFO_OW, 0xFC); if (!okInfo(info)) return null; }
+      let bgPal = Array.from(info.subarray(3, 3 + 16)).map((c) => NES[c & 0x3F]);
       const layouts = bytes(PRG.ROOM_LAYOUTS_OW, LAYOUTS * 16);
-      const dir = bytes(PRG.COLUMN_DIRECTORY_OW, 32);
-      const heaps = [];
-      for (let i = 0; i < 16; i++) {
-        const p = dir[i * 2] | (dir[i * 2 + 1] << 8);
-        if (p < 0x8000 || p >= 0xC000) return null;              // must point into bank 5
-        heaps.push(base + 5 * 0x4000 + (p - 0x8000));
+      // Column heaps, from a 16-pointer directory into bank 5.
+      function heapsFrom(dir) {
+        const out = [];
+        for (let i = 0; i < 16; i++) {
+          const p = dir[i * 2] | (dir[i * 2 + 1] << 8);
+          if (p < 0x8000 || p >= 0xC000) return null;           // must point into bank 5
+          out.push(base + 5 * 0x4000 + (p - 0x8000));
+        }
+        return out;
       }
+      const dir0 = bytes(PRG.COLUMN_DIRECTORY_OW, 32).slice();
+      if (heap0 >= 0x8000 && heap0 < 0xC000) { dir0[0] = heap0 & 0xFF; dir0[1] = heap0 >> 8; }   // PatchColumnDirectoryForCellar
+      let heaps = heapsFrom(dir0);
+      if (!heaps) return null;
       const primary = bytes(PRG.PRIMARY_SQUARES_OW, 0x38);
       const secondary = bytes(PRG.SECONDARY_SQUARES_OW, 0x40);
 
@@ -148,7 +173,9 @@
 
       const T = (t, s) => block[t * 0x80 + s];
       const screens = [];
-      for (let s = 0; s < 128; s++) {
+      function buildScreens() {
+       screens.length = 0;
+       for (let s = 0; s < 128; s++) {
         const dest = (T(1, s) >> 2) & 0x3F;
         screens.push({
           s,
@@ -158,6 +185,37 @@
           quest: (T(5, s) >> 6) & 3,               // 0 both, 1 first only, 2 second only, 3 neither
           entrance: E[ENTRANCE[s]] || null,
         });
+       }
+      }
+      buildScreens();
+
+      // The game's own copies, from cartridge RAM while a file is on the
+      // overworld: LevelBlockAttrsA-F ($687E), ColumnDirectoryOW ($6827) and
+      // the palettes ($6B7E). These are exactly what the game draws from, so
+      // they replace the ROM file's when they differ. Returns how many
+      // screens changed (layout, palette or destination), or -1 if the RAM
+      // doesn't hold overworld tables.
+      function applyLive(sram) {
+        if (!sram || sram.length < 0x2000) return -1;
+        const live = sram.subarray(0x087E, 0x087E + 0x300);
+        for (let i = 0; i < 0x80; i++) if ((live[0x180 + i] & 0x7F) >= LAYOUTS) return -1;
+        const liveHeaps = heapsFrom(sram.subarray(0x0827, 0x0827 + 32));
+        if (!liveHeaps) return -1;
+        let changed = 0;
+        for (let i = 0; i < 0x80; i++) {
+          if (((live[0x180 + i] ^ block[0x180 + i]) & 0x7F) || ((live[i] ^ block[i]) & 3) ||
+              (live[0x80 + i] ^ block[0x80 + i])) changed++;
+        }
+        const heapsChanged = liveHeaps.some((h, i) => h !== heaps[i]);
+        block.set(live);
+        if (heapsChanged) { heaps = liveHeaps; colCache.clear(); changed = Math.max(changed, 128); }
+        const pal = sram.subarray(0x0B7E, 0x0B7E + 19);
+        if (pal[0] === 0x3F && pal[1] === 0x00 && pal[2] === 0x20) {
+          const p2 = Array.from(pal.subarray(3, 19)).map((c) => NES[c & 0x3F]);
+          if (p2.some((c, i) => c !== bgPal[i])) { bgPal = p2; changed = Math.max(changed, 128); }
+        }
+        buildScreens();
+        return changed;
       }
 
       // One screen as RGBA, 256 x 176.
@@ -209,7 +267,7 @@
         screens,
         // The screen's destination for a file of this quest (0 first, 1 second).
         destFor(s, quest) { return quest === 1 && q2.has(s) ? q2.get(s) : screens[s].dest; },
-        blockA: Array.from(block.subarray(0, 0x80)),
+        applyLive, where,
         screen: (s) => screens[s],
         startRoom: info[0x2F],
         anyRoadRooms: Array.from(info.subarray(0x34, 0x38)),

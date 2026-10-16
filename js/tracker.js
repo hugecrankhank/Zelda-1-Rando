@@ -111,6 +111,7 @@
   let quest = 0;              // the file's quest: 0 first, 1 second
   let liveDest = null;        // live overworld destinations from cartridge RAM
   let ow = null;              // OwMap for this ROM, or null
+  let mapInfo = 'no map', mapTables = '';
   let mapCanvas = null, mapSecret = new Uint8Array(128), mapDirty = false;
   let link = 'off';           // off | waiting | live
   let view = 'ow', dgLevel = 1, dgPinned = false;
@@ -161,12 +162,21 @@
   // Reads the live overworld tables from cartridge RAM while on the
   // overworld; checks table A against the ROM's so we never mistake a
   // dungeon's tables for the overworld's.
+  // While on the overworld, the game's live tables replace the ROM file's:
+  // they're what the game itself draws from. Checked every few seconds.
+  let liveCheckAt = 0;
   function readLiveTables() {
     const sr = window.NesBridge && NesBridge.sram && NesBridge.sram();
     if (!sr || !ow) return;
-    let same = 0;
-    for (let s = 0; s < 128; s++) if (sr[SRAM_BLOCK + s] === ow.blockA[s]) same++;
-    if (same < 120) return;
+    const now = performance.now();
+    if (liveDest && now - liveCheckAt < 5000) return;
+    liveCheckAt = now;
+    const changed = ow.applyLive(sr);
+    if (changed < 0) return;
+    if (changed > 0) {
+      mapInfo = 'drawn from the game\'s live tables (' + changed + ' screens differed from the ROM file)';
+      mapDirty = true; dirty = true;
+    } else if (!liveDest) mapInfo = 'drawn from the ROM file (matches the game\'s live tables)';
     const d = new Array(128);
     for (let s = 0; s < 128; s++) d[s] = (sr[SRAM_BLOCK + 0x80 + s] >> 2) & 0x3F;
     liveDest = d;
@@ -837,12 +847,23 @@
     // The ROM being played: draws the map and finds the entrances.
     setRom(bytes) {
       ow = bytes && window.OwMap ? OwMap.read(bytes) : null;
+      mapInfo = ow ? 'drawn from the ROM file (not yet checked against the game)' : 'no map: not a readable Zelda ROM';
+      if (ow) {
+        const w = ow.where, hex = (n) => '$' + n.toString(16).toUpperCase();
+        const moved = [];
+        if (w.block !== 0x18400) moved.push('screens ' + hex(w.block));
+        if (w.info !== 0x19300) moved.push('level info ' + hex(w.info));
+        if (w.layouts !== 0x15418) moved.push('layouts ' + hex(w.layouts));
+        if (w.heap0 !== 0x9BD8) moved.push('heap 0 ' + hex(w.heap0));
+        mapTables = moved.length ? 'tables moved: ' + moved.join(', ') : 'tables at the usual places';
+      }
       mapSecret = new Uint8Array(128); liveDest = null;
       mapDirty = true; dirty = true; render();
       return !!ow;
     },
     onLink(fn) { linkListeners.add(fn); fn(link); },
     get link() { return link; },
+    get mapInfo() { return mapInfo + (mapTables ? '; ' + mapTables : ''); },
     _tick: tick, _state: () => S, _ow: () => ow,   // for tests
   };
 })();

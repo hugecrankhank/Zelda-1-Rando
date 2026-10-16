@@ -105,6 +105,7 @@
       lines.push('Emulator memory: ' + live.wasmMB + ' MB (started at ' + live.firstWasmMB + ' MB).');
       if (live.jsMB != null) lines.push('Page memory: ' + live.jsMB + ' MB.');
       lines.push('Tracking: ' + live.tracking + '. Save states taken: ' + live.saveStates + '.');
+      if (window.Z1Tracker) lines.push('Map: ' + Z1Tracker.mapInfo + '.');
     } else {
       lines.push('No game running.');
     }

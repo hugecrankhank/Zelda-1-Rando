@@ -10,7 +10,7 @@
  * US releases; PRG1 doesn't move any of them).
  *
  *   const ow = OwMap.read(romBytes)  // null if this isn't a Zelda 1 ROM
- *   ow.drawScreen(ctx, s, x, y, scale, secretFound)
+ *   ow.drawMap(ctx, W, H, secretOf) / ow.drawScreen(ctx, s, secretFound)
  *   ow.screen(s) → {dest, kind, entrance, quest, layout}
  */
 (function () {
@@ -247,14 +247,40 @@
         return img;
       }
 
-      let scratch = null;
-      function drawScreen(ctx, s, x, y, w, h, secretFound) {
-        if (!scratch) { scratch = document.createElement('canvas'); scratch.width = 256; scratch.height = 176; }
-        const sctx = scratch.getContext('2d');
-        sctx.putImageData(new ImageData(screenPixels(s, secretFound), 256, 176), 0, 0);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(scratch, 0, 0, 256, 176, x, y, w, h);
+      // Draws screens straight into pixel buffers (no canvas-to-canvas
+      // copies: Safari could show stale content when one scratch canvas was
+      // redrawn and copied many times in a row).
+      //   drawMap(ctx, W, H, secretOf): the whole 16x8 map, each screen
+      //   box-filtered down to its cell of a W x H image.
+      function drawMap(ctx, W, H, secretOf) {
+        const out = ctx.createImageData(W, H);
+        const d = out.data;
+        for (let s = 0; s < 128; s++) {
+          const px = screenPixels(s, secretOf(s));
+          const x0 = Math.round((s & 15) * W / 16), x1 = Math.round(((s & 15) + 1) * W / 16);
+          const y0 = Math.round((s >> 4) * H / 8), y1 = Math.round(((s >> 4) + 1) * H / 8);
+          const cw = x1 - x0, ch = y1 - y0;
+          for (let y = 0; y < ch; y++) {
+            const sy0 = Math.floor(y * 176 / ch), sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * 176 / ch));
+            for (let x = 0; x < cw; x++) {
+              const sx0 = Math.floor(x * 256 / cw), sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * 256 / cw));
+              let r = 0, g = 0, b = 0, n = 0;
+              for (let sy = sy0; sy < sy1; sy++) {
+                for (let sx = sx0; sx < sx1; sx++) {
+                  const o = (sy * 256 + sx) * 4;
+                  r += px[o]; g += px[o + 1]; b += px[o + 2]; n++;
+                }
+              }
+              const o = ((y0 + y) * W + x0 + x) * 4;
+              d[o] = r / n; d[o + 1] = g / n; d[o + 2] = b / n; d[o + 3] = 255;
+            }
+          }
+        }
+        ctx.putImageData(out, 0, 0);
+      }
+      // One screen at full size (256 x 176) into a canvas of that size.
+      function drawScreen(ctx, s, secretFound) {
+        ctx.putImageData(new ImageData(screenPixels(s, secretFound), 256, 176), 0, 0);
       }
 
       // The second quest swaps eight screens' destinations when a file loads
@@ -277,7 +303,7 @@
           const i = (dest - 0x10) * 3;
           return [0, 1, 2].map((k) => block[4 * 0x80 + i + k] & 0x3F).filter((id) => id !== 0x3F);
         },
-        screenPixels, drawScreen, layout, squareTiles,
+        screenPixels, drawScreen, drawMap, layout, squareTiles,
       };
     } catch (e) {
       console.warn('[owmap] not a readable Zelda overworld', e);

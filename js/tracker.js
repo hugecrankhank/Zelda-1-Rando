@@ -499,11 +499,7 @@
     c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr);
     const ctx = c.getContext('2d');
     if (!ow) { ctx.clearRect(0, 0, c.width, c.height); return; }
-    const sw = c.width / 16, sh = c.height / 8;
-    for (let s = 0; s < 128; s++) {
-      const x = Math.round((s & 15) * sw), y = Math.round((s >> 4) * sh);
-      ow.drawScreen(ctx, s, x, y, Math.round(((s & 15) + 1) * sw) - x, Math.round(((s >> 4) + 1) * sh) - y, !!mapSecret[s]);
-    }
+    ow.drawMap(ctx, c.width, c.height, (s) => !!mapSecret[s]);
   }
 
   // ── interactions ─────────────────────────────────────────────────────────
@@ -545,7 +541,7 @@
     // Magnified screen, like Z-Tracker's hover magnifier.
     if (ow) {
       const cv = h('canvas', { class: 'pk-zoom', width: '256', height: '176' });
-      ow.drawScreen(cv.getContext('2d'), s, 0, 0, 256, 176, !!mapSecret[s]);
+      ow.drawScreen(cv.getContext('2d'), s, !!mapSecret[s]);
       p.append(cv);
     }
     PICKER.forEach((g, gi) => {

@@ -96,11 +96,15 @@
   const NEEDS = { bomb: 'bombs', candle: 'a candle', bracelet: 'the power bracelet', raft: 'the raft',
     ladder: 'the ladder', 'ladder+bomb': 'the ladder and bombs', recorder: 'the recorder', open: '' };
 
+  // What a shop can be marked as selling (Zelda item codes, see WARE).
+  const SHOP_WARES = [0x00, 0x08, 0x09, 0x0A, 0x06, 0x07, 0x12, 0x13, 0x1C, 0x04, 0x19, 0x0B,
+    0x1A, 0x1F, 0x20, 0x05, 0x0C, 0x0D, 0x14, 0x10, 0x11, 0x1D, 0x1E, 0x01, 0x02, 0x03, 0x15];
+  const SHOP_MAX = 3;
   const coord = (s) => 'ABCDEFGH'[(s >> 4) & 7] + ((s & 15) + 1);
 
   // ── state ────────────────────────────────────────────────────────────────
   const blank = () => ({ v: 2, manual: {}, lvManual: {}, entrance: {}, entranceManual: {}, marks: {},
-    visited: [], entered: {}, rooms: {}, log: [], hideSpots: false });
+    visited: [], entered: {}, rooms: {}, log: [], hideSpots: false, shop: {} });
   let S = blank();
   let key = 'z1ru:track:manual';
   let label = 'No seed';
@@ -115,6 +119,7 @@
   let mapCanvas = null, mapSecret = new Uint8Array(128), mapDirty = false;
   let link = 'off';           // off | waiting | live
   let view = 'ow', dgLevel = 1, dgPinned = false;
+  let itemsUnderMap = true;
   const COMPACT = window.matchMedia('(max-width: 900px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px)');
   const isCompact = () => COMPACT.matches;
   if (isCompact()) view = 'items';
@@ -432,7 +437,15 @@
     el.picker = h('div', { class: 'picker', hidden: '' });
     el.itemsPanel = h('div', { class: 't-view itemsp' }, el.stats, el.dia, el.oia, el.items);
     root.append(el.itemsPanel, el.tabs, el.ow, el.dg, el.log, el.foot, el.picker);
-    if (window.ResizeObserver) new ResizeObserver(() => { dirty = true; render(); }).observe(root);
+    // When the tracker gets taller (rotation, a bigger window), try putting
+    // the items back under the map.
+    let lastH = 0;
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      const hNow = root.clientHeight;
+      if (hNow > lastH + 40) itemsUnderMap = true;
+      lastH = hNow;
+      dirty = true; render();
+    }).observe(root);
     COMPACT.addEventListener && COMPACT.addEventListener('change', () => {
       if (isCompact() && view !== 'items') view = 'items';
       dirty = true; render();
@@ -451,6 +464,21 @@
     if (!el.root || !el.root.clientWidth) return;
     const compact = isCompact();
     const W = el.root.clientWidth;
+    // Overworld: 16x8 screens of 16:11, the whole map as large as fits.
+    if (!el.ow.hidden) {
+      let w = W, hgt = w * 11 * 8 / (16 * 16);
+      if (compact && !el.root.classList.contains('with-items')) {
+        const H = el.ow.clientHeight - el.owBar.offsetHeight - 4;
+        if (H > 0 && hgt > H) { hgt = H; w = hgt * 16 * 16 / (11 * 8); }
+      }
+      w = Math.floor(w / 16) * 16;
+      hgt = Math.round(w * 11 * 8 / 256);
+      if (el.map.clientWidth !== w || el.map.clientHeight !== hgt) {
+        el.map.style.width = w + 'px'; el.map.style.height = hgt + 'px';
+        el.map.style.setProperty('--owh', (hgt / 8) + 'px');
+        mapDirty = true;
+      }
+    }
     // Items panel: 9 level columns; one size for every box ("cell").
     if (!el.itemsPanel.hidden) {
       let cell = Math.floor((W - 8 * 3) / 9 - 4);
@@ -468,20 +496,9 @@
       }
       cell = Math.max(18, Math.min(compact ? 44 : 46, cell));
       set(cell);
-    }
-    // Overworld: 16x8 screens of 16:11, the whole map as large as fits.
-    if (!el.ow.hidden) {
-      let w = W, hgt = w * 11 * 8 / (16 * 16);
-      if (compact) {
-        const H = el.ow.clientHeight - el.owBar.offsetHeight - 4;
-        if (H > 0 && hgt > H) { hgt = H; w = hgt * 16 * 16 / (11 * 8); }
-      }
-      w = Math.floor(w / 16) * 16;
-      hgt = Math.round(w * 11 * 8 / 256);
-      if (el.map.clientWidth !== w || el.map.clientHeight !== hgt) {
-        el.map.style.width = w + 'px'; el.map.style.height = hgt + 'px';
-        el.map.style.setProperty('--owh', (hgt / 8) + 'px');
-        mapDirty = true;
+      // Under the map there must be room for boxes of a usable size.
+      if (compact && el.root.classList.contains('with-items') && cell < 22 && itemsUnderMap) {
+        itemsUnderMap = false; dirty = true; setTimeout(render, 0);
       }
     }
   }
@@ -522,6 +539,7 @@
     const k = kindAt(s), st = checkState(s), spot = spotAt(s);
     let t = 'Screen ' + coord(s);
     if (k) t += ': ' + KINDS[k][0];
+    if (k === 'shop') { const w = shopItems(s); if (w.length) t += ' (' + w.map((id) => WARE[id][2]).join(', ') + ')'; }
     if (st === 'todo' && spot && !S.hideSpots) {
       const can = canOpen(spot.how);
       t += spot.how === 'open' ? ', entrance not visited' : ', entrance (needs ' + (NEEDS[spot.how] || 'something') + ')' + (can ? ', you can open it' : '');
@@ -533,13 +551,29 @@
     return t;
   }
 
+  // A shop's items: what you marked, else what the game sells there once
+  // you've been inside.
+  function shopItems(s) {
+    if (S.shop[s] && S.shop[s].length) return S.shop[s].filter((id) => WARE[id]);
+    const dest = S.entered[s];
+    return ow && dest ? ow.wares(dest).filter((id) => WARE[id]).slice(0, SHOP_MAX) : [];
+  }
+  function toggleShopItem(s, id) {
+    const cur = (S.shop[s] && S.shop[s].length) ? S.shop[s].slice() : shopItems(s).slice();
+    const i = cur.indexOf(id);
+    if (i >= 0) cur.splice(i, 1);
+    else if (cur.length < SHOP_MAX) cur.push(id);
+    S.shop[s] = cur;
+    dirty = true; save(); render();
+  }
+
   function openPicker(s, anchor) {
     const p = el.picker;
     p.innerHTML = '';
     const cur = kindAt(s);
     p.append(h('div', { class: 'pk-head' }, tileText(s)));
     // Magnified screen, like Z-Tracker's hover magnifier.
-    if (ow) {
+    if (ow && cur !== 'shop') {     // (a shop shows its item tray instead)
       const cv = h('canvas', { class: 'pk-zoom', width: '256', height: '176' });
       ow.drawScreen(cv.getContext('2d'), s, !!mapSecret[s]);
       p.append(cv);
@@ -548,9 +582,28 @@
       const row = h('div', { class: 'pk-row pk-' + ['lv', 'cave', 'other'][gi] });
       g.forEach((k) => {
         row.append(h('button', { type: 'button', class: cur === k ? 'on' : '', title: KINDS[k][0],
-          onclick: () => { setMark(s, k); closePicker(); } }, gi === 0 ? k : KINDS[k][0]));
+          onclick: () => {
+            setMark(s, k);
+            // Picking Shop keeps the picker open to choose its items.
+            if (k === 'shop') openPicker(s, anchor); else closePicker();
+          } }, gi === 0 ? k : KINDS[k][0]));
       });
       p.append(row);
+      // Shops: tick up to three items; they show on the tile.
+      if (gi === 1 && cur === 'shop') {
+        const have = shopItems(s);
+        const grid = h('div', { class: 'pk-shop', role: 'group', 'aria-label': 'Shop items' },
+          h('div', { class: 'pk-sub' }, 'Shop items (up to ' + SHOP_MAX + ')'));
+        SHOP_WARES.forEach((id) => {
+          const on = have.indexOf(id) >= 0;
+          grid.append(h('button', { type: 'button', class: 'pk-ware' + (on ? ' on' : ''), title: WARE[id][2],
+            'aria-label': WARE[id][2], 'aria-pressed': String(on),
+            html: I().svg(WARE[id][0], WARE[id][1]),
+            onclick: () => { toggleShopItem(s, id); openPicker(s, anchor); } }));
+        });
+        grid.append(h('button', { type: 'button', class: 'pk-done', onclick: closePicker }, 'Done'));
+        p.append(grid);
+      }
     });
     p.append(h('button', { type: 'button', class: 'pk-clear', onclick: () => { setMark(s, null); closePicker(); } }, 'Clear label'));
     p.hidden = false;
@@ -558,8 +611,10 @@
     p.style.width = pw + 'px';
     p.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2)) + 'px';
     const ph = Math.min(p.offsetHeight, window.innerHeight - 16);
+    const tray = p.querySelector('.pk-shop');
     const below = r.bottom + 6 + ph < window.innerHeight;
     p.style.top = (below ? r.bottom + 6 : Math.max(8, r.top - ph - 6)) + 'px';
+    if (tray) tray.scrollIntoView({ block: 'nearest' });
   }
   function closePicker() { if (el.picker) el.picker.hidden = true; }
 
@@ -568,6 +623,7 @@
       if (entranceOf(n) === s && code !== 'L' + n) { delete S.entrance[n]; S.entranceManual[n] = true; }
     }
     delete S.marks[s];
+    if (code !== 'shop') delete S.shop[s];
     if (code && /^L\d$/.test(code)) {
       const n = +code[1];
       Object.keys(S.marks).forEach((k) => { if (S.marks[k] === code) delete S.marks[k]; });
@@ -622,7 +678,11 @@
     el.root.classList.toggle('compact', compact);
     el.root.dataset.view = view;
     Object.entries(el.tabBtns).forEach(([id, b]) => b.setAttribute('aria-selected', String(id === view)));
-    el.itemsPanel.hidden = compact && view !== 'items';
+    // Phones: on the Overworld tab the items panel fills the space under the
+    // map (fit() drops it again if there isn't room for it).
+    const withItems = compact && view === 'ow' && itemsUnderMap;
+    el.root.classList.toggle('with-items', withItems);
+    el.itemsPanel.hidden = compact && view !== 'items' && !withItems;
     el.ow.hidden = view !== 'ow'; el.dg.hidden = view !== 'dg'; el.log.hidden = view !== 'log';
     fit();
 
@@ -719,10 +779,10 @@
       const n = +k[1];
       return '<b class="lvl' + (lvValue(n, 'tri') ? ' done' : '') + '">' + n + '</b>';
     }
-    const dest = S.entered[s];
-    if (k === 'shop' && ow && dest) {
-      const w = ow.wares(dest).filter((id) => WARE[id]).slice(0, 2);
-      if (w.length) return '<span class="ico2">' + w.map((id) => I().svg(WARE[id][0], WARE[id][1])).join('') + '</span>';
+    if (k === 'shop') {
+      const w = shopItems(s);
+      if (w.length) return '<span class="ico2 n' + w.length + '">' + w.map((id) => I().svg(WARE[id][0], WARE[id][1])).join('') + '</span>';
+      return '<span class="ico1">' + I().svg('rupee', { x: 'Y', z: 'W' }) + '</span>';
     }
     const ico = { wood: ['sword', { x: 'N', z: 'T' }], white: ['sword', null], magic: ['sword', { x: 'C', z: 'B' }],
       letter: ['letter', { x: 'G', z: 'G' }], takeany: ['heart', null], potion: ['potion', { x: 'R', z: 'O' }],

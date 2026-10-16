@@ -81,7 +81,9 @@ are kept in this browser (IndexedDB), never uploaded.
   raft, ladder or recorder first), a gold ring when you've been in but left
   its item behind, and a check mark when it's done. Once you've been in, the
   tile shows what's there (level number, sword, take-any, a shop's wares...).
-  Tap a screen for a magnified view and to label it by hand. The **Spots**
+  Tap a screen for a magnified view and to label it by hand. Mark a screen
+  as a **Shop** and tick up to three items it sells; they show on the tile
+  (once you've been inside, the shop's real items fill in by themselves). The **Spots**
   box hides the entrance dots if you'd rather find them yourself.
 
 **Autotracking.** From the NES's RAM the tracker reads:

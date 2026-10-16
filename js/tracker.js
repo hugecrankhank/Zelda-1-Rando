@@ -607,14 +607,32 @@
     });
     p.append(h('button', { type: 'button', class: 'pk-clear', onclick: () => { setMark(s, null); closePicker(); } }, 'Clear label'));
     p.hidden = false;
+    // Keep it inside the safe area: the installed iPhone app draws under the
+    // status bar and the home indicator.
+    const safe = safeInsets();
+    const vh = window.innerHeight, top0 = safe.top + 8, bottom0 = vh - safe.bottom - 8;
+    p.style.maxHeight = (bottom0 - top0) + 'px';
     const r = anchor.getBoundingClientRect(), pw = Math.min(320, window.innerWidth - 16);
     p.style.width = pw + 'px';
     p.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2)) + 'px';
-    const ph = Math.min(p.offsetHeight, window.innerHeight - 16);
+    const ph = Math.min(p.offsetHeight, bottom0 - top0);
+    let top = r.bottom + 6 + ph <= bottom0 ? r.bottom + 6 : r.top - ph - 6;
+    top = Math.max(top0, Math.min(top, bottom0 - ph));
+    p.style.top = top + 'px';
     const tray = p.querySelector('.pk-shop');
-    const below = r.bottom + 6 + ph < window.innerHeight;
-    p.style.top = (below ? r.bottom + 6 : Math.max(8, r.top - ph - 6)) + 'px';
     if (tray) tray.scrollIntoView({ block: 'nearest' });
+  }
+  // The safe-area insets, read from CSS env() through a hidden probe.
+  let safeProbe = null;
+  function safeInsets() {
+    if (!safeProbe) {
+      safeProbe = h('div', { 'aria-hidden': 'true' });
+      safeProbe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;' +
+        'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+      document.body.append(safeProbe);
+    }
+    const cs = getComputedStyle(safeProbe);
+    return { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0 };
   }
   function closePicker() { if (el.picker) el.picker.hidden = true; }
 

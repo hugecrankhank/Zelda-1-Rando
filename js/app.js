@@ -88,9 +88,9 @@
   // (getState/loadState, pause, volume) and calls EJS_onGameStart.
   const COMPACT_Q = window.matchMedia('(max-width: 900px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px)');
   function placeControls() {
-    // Phones: the on-screen controller goes under (or beside) the picture,
-    // so it never covers the game.
-    if (window.EmuPlayer) EmuPlayer.setTouchPlacement(COMPACT_Q.matches ? 'outside' : 'overlay');
+    // The on-screen controller sits over the picture (semi-transparent), so
+    // the game takes only its own height and the tracker gets the rest.
+    if (window.EmuPlayer) EmuPlayer.setTouchPlacement('overlay');
   }
   if (COMPACT_Q.addEventListener) COMPACT_Q.addEventListener('change', placeControls);
 

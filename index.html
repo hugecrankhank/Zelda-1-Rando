@@ -301,9 +301,9 @@
     body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
     header { flex: none; }
     main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-    /* Picture (8:7, so 7/8 of the width tall) plus the on-screen controller
-       under it; gives way to the tracker on short screens. */
-    #game-wrap { flex: 0 1 calc(100vw * 7 / 8 + 200px); min-height: 280px; }
+    /* Just the picture (8:7, so 7/8 of the width tall); the on-screen
+       controller is drawn over it. */
+    #game-wrap { flex: 0 0 calc(100vw * 7 / 8); min-height: 0; max-height: 58vh; }
     body:not(.playing) #game-wrap { flex: none; height: auto; min-height: 0; }
     body:not(.playing) #placeholder { position: static; padding: 20px 18px 22px; gap: 10px; }
     #placeholder h2 { font-size: 24px; }

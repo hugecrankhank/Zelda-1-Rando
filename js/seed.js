@@ -308,5 +308,23 @@
     pending.clear();
   }
 
-  window.Z1Seed = { init, open, release };
+  // Crowd Control's "New seed!" (js/crowd.js): a new seed number with the
+  // flags last used in this dialog, then straight into it. Resolves with the
+  // seed number once it's made; the page then reloads into the new game.
+  async function rollAndPlay() {
+    if (busy) throw new Error('A seed is already being made');
+    if (!base) await loadBaseFromStore();
+    if (!base) throw new Error('No base ROM yet: open New seed once and pick your Zelda ROM');
+    await startWorker();
+    if (!form) { const saved = readSaved(); await loadFlags(saved.flags || metadata.defaultFlags, saved.zoraFlags || ''); }
+    randomSeed();
+    last = null;
+    await generate();
+    if (!last) throw new Error(($('gen-status').textContent || 'Generation failed').trim());
+    const made = last;
+    setTimeout(() => onPlay(made, { noConfirm: true }), 0);
+    return made.meta.seed;
+  }
+
+  window.Z1Seed = { init, open, release, rollAndPlay };
 })();

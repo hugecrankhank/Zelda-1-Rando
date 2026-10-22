@@ -102,6 +102,33 @@ label it (levels, sword caves, shops, take-any, hints and so on). A hand-set
 value stays until the game's own value changes. Tracking is saved per ROM, and
 each ROM gets its own battery save, so seeds never overwrite each other.
 
+## Crowd effects (TikTok LIVE)
+
+`js/crowd.js` connects to Rando Hub's **Crowd Control+** bridge
+(`ws://localhost:21214`) the same way the ALTTP game does, so one bridge and
+one `mapping.json` work for both. Turn it on in the emulator menu (⋯) →
+**Crowd effects**; every effect has a test button there.
+
+Effect ids match the ALTTP ones where the effect means the same thing:
+
+| id | effect |
+|---|---|
+| `heal_full`, `heal_1` | Full heal, +1 heart |
+| `hurt_2`, `hp_1` | -2 hearts (never kills), down to 1 heart |
+| `one_hit` | One-heart mode (30 s) |
+| `rupees_plus`, `rupees_minus` | ±50 rupees (counted in by the game, with the sound) |
+| `bombs_plus`, `bombs_none` | +4 bombs (up to the bag size), lose all bombs |
+| `clock` | Clock: enemies on screen freeze (Zelda 1 only) |
+| `invert`, `no_sword`, `no_item`, `swap_by`, `freeze` | Inverted D-pad, no sword (A), no B item, A/B swapped, frozen 3 s |
+| `mirror`, `upside_down`, `wobble`, `tiny`, `crt` | Picture tricks |
+| `speed_up`, `slow_mo` | 1.5× / 0.5× speed |
+| `seed_roll` | New seed with the flags last used (off until **Allow seed reroll** is ticked; 10 s countdown) |
+
+ALTTP-only effects (magic, arrows, bottles, Pink Link, extra enemies, warps,
+boss detours, ice / cucco storm, sprites, MSU) have no Zelda 1 version; a gift
+mapped to one is skipped while this game is connected, and the bridge says so
+in its log.
+
 ## Debugging
 
 ```js

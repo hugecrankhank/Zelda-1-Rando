@@ -24,7 +24,7 @@
   });
 
   // ── seed dialog ──────────────────────────────────────────────────────────
-  Z1Seed.init({ onPlay: (entry) => play(entry) });
+  Z1Seed.init({ onPlay: (entry, opts) => play(entry, opts) });
   $('new-seed').addEventListener('click', Z1Seed.open);
   $('ph-new').addEventListener('click', Z1Seed.open);
 
@@ -65,7 +65,7 @@
     if (booted) {
       // The player runs one game per page load; the seed is already stored, so
       // reload and start it straight away.
-      if (!confirm('Switch to ' + describe(entry) + '? The current game closes; its save stays in this browser.')) return;
+      if (!(opts && opts.noConfirm) && !confirm('Switch to ' + describe(entry) + '? The current game closes; its save stays in this browser.')) return;
       await Z1Store.set('current', { bytes: entry.rom.buffer.slice(0), name: entry.name, meta: entry.meta }).catch(() => {});
       sessionStorage.setItem('z1ru:autoplay', '1');
       location.reload();

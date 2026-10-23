@@ -360,7 +360,6 @@
     var kind = btn.dataset.map, target = btn.dataset.b;
     menuEl.querySelectorAll('button.wait').forEach(function (x) { x.classList.remove('wait'); });
     btn.classList.add('wait'); btn.textContent = kind === 'key' ? 'Press a key…' : 'Press a button…';
-    if (kind === 'pad') padPoll();
     input.capture = function (r) {
       input.capture = null;
       if (!r.cancel) {
@@ -375,9 +374,21 @@
       }
       renderMenu();
     };
+    // after capture is set: the poll stops as soon as nothing is waiting for a press
+    if (kind === 'pad') padPoll();
   }
   // While paused the frame loop doesn't read controllers; poll for a remap.
-  function padPoll() { if (!input.capture) return; input.gamepadMask(); requestAnimationFrame(padPoll); }
+  // One loop at a time: picking box after box must not start a second one.
+  var polling = false;
+  function padPoll() {
+    if (polling) return;
+    polling = true;
+    (function step() {
+      if (!input.capture) { polling = false; return; }
+      input.gamepadMask();
+      requestAnimationFrame(step);
+    })();
+  }
 
   function fullscreen() {
     if (document.fullscreenElement) { document.exitFullscreen(); return; }

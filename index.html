@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Z1R Unified</title>
 <meta name="description" content="Roll Zelda 1 randomizer seeds, play them, and track your progress in one page.">
 <link rel="manifest" href="manifest.webmanifest">
@@ -17,6 +17,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
 <style>
+/* iPad / iPhone: a quick double tap (easy to do on the on-screen controller)
+   zoomed the page in with no easy way back. manipulation keeps taps, scrolling
+   and pinch, and turns double-tap zoom off. */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   :root {
     /* NES palette: black $0F, white $30, subscreen blue $12, life red $16,
        overworld sand $37, triforce gold $28, gray $00, Link green $2A */

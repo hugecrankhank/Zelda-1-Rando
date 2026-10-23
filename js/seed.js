@@ -308,15 +308,21 @@
     pending.clear();
   }
 
-  // Crowd Control's "New seed!" (js/crowd.js): a new seed number with the
-  // flags last used in this dialog, then straight into it. Resolves with the
+  // Crowd Control's new seeds (js/crowd.js): a new seed number with the
+  // flags last used in this dialog (or a random preset's), then straight into it. Resolves with the
   // seed number once it's made; the page then reloads into the new game.
-  async function rollAndPlay() {
+  // opts.mode 'preset' or 'chaos': a random preset's flags instead.
+  async function rollAndPlay(opts) {
+    const mode = opts && opts.mode;
     if (busy) throw new Error('A seed is already being made');
     if (!base) await loadBaseFromStore();
     if (!base) throw new Error('No base ROM yet: open New seed once and pick your Zelda ROM');
     await startWorker();
     if (!form) { const saved = readSaved(); await loadFlags(saved.flags || metadata.defaultFlags, saved.zoraFlags || ''); }
+    if (mode === 'preset' || mode === 'chaos') {
+      const list = metadata.presets.filter((p) => p.available);
+      if (list.length) { const p = list[Math.floor(Math.random() * list.length)]; await loadFlags(p.flags, p.zoraFlags || ''); }
+    }
     randomSeed();
     last = null;
     await generate();

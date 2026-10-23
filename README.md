@@ -123,6 +123,8 @@ Effect ids match the ALTTP ones where the effect means the same thing:
 | `mirror`, `upside_down`, `wobble`, `tiny`, `crt` | Picture tricks |
 | `speed_up`, `slow_mo` | 1.5× / 0.5× speed |
 | `seed_roll` | New seed with the flags last used (off until **Allow seed reroll** is ticked; 10 s countdown) |
+| `seed_preset` | New seed with a random preset (same switch and countdown) |
+| `seed_chaos` | CHAOS seed: a random preset too, since Zelda 1 has no chaos generator (in Rando Hub it can land on Zelda 3's CHAOS seed) |
 
 ALTTP-only effects (magic, arrows, bottles, Pink Link, extra enemies, warps,
 boss detours, ice / cucco storm, sprites, MSU) have no Zelda 1 version; a gift

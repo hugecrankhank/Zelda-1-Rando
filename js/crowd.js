@@ -115,31 +115,45 @@
     speed_up:    { name: 'Speed up (1.5x)', good: false, secs: 20, start: function () { fx() && fx().setSpeed(1.5); }, end: function () { fx() && fx().setSpeed(1); } },
     slow_mo:     { name: 'Slow motion', good: true, secs: 15, start: function () { fx() && fx().setSpeed(0.5); }, end: function () { fx() && fx().setSpeed(1); } },
 
-    seed_roll:   { name: 'New seed!', good: false,
-      app: function (job) { return startReroll(job); } },
+    seed_roll:   { name: 'New seed (same flags)', good: false,
+      app: function (job) { return startReroll(job, 'same'); } },
+    seed_preset: { name: 'Random preset seed', good: false,
+      app: function (job) { return startReroll(job, 'preset'); } },
+    seed_chaos:  { name: 'CHAOS seed', good: false,
+      app: function (job) { return startReroll(job, 'chaos'); } },
   };
 
   // ── new seed (off unless allowed; 10 s countdown, cancel in the menu) ────
-  var REROLL_SECS = 10, rerollT = null, rerollLeft = 0, rerollBy = '', rerollBusy = false;
-  function startReroll(job) {
+  // same: the flags last used; preset: a random Zelda 1 preset; chaos: a
+  // random preset too (Zelda 1 has no chaos generator). In Rando Hub with
+  // "Rerolls can land on either game", preset and chaos may go to Zelda 3.
+  var ROLL_KIND = {
+    same:   { count: 'NEW SEED IN ', feed: 'New seed in ', roll: 'Rolling a new seed…', sub: 'Same flags as last time', done: 'New seed ready!' },
+    preset: { count: 'RANDOM PRESET IN ', feed: 'Random preset in ', roll: 'Rolling a random preset…', sub: 'A random preset', done: 'Random preset ready!' },
+    chaos:  { count: 'CHAOS SEED IN ', feed: 'CHAOS seed in ', roll: 'Rolling a CHAOS seed…', sub: 'A random preset', done: 'CHAOS seed ready!' },
+  };
+  var REROLL_SECS = 10, rerollT = null, rerollLeft = 0, rerollBy = '', rerollBusy = false, rerollMode = 'same';
+  function startReroll(job, mode) {
+    if (!rerollT && !rerollBusy) rerollMode = ROLL_KIND[mode] ? mode : 'same';
+    var K = ROLL_KIND[rerollMode];
     if (!cfg.allowReroll) { feed('Seed reroll is turned off in Crowd effects', 'info'); return false; }
     if (rerollT || rerollBusy) { feed('A new seed is already coming', 'info'); return false; }
     if (!root.Z1Seed || !root.Z1Seed.rollAndPlay) { feed('Not available: new seed', 'info'); return false; }
     rerollBy = (job && job.user && job.user !== 'test') ? job.user : '';
     rerollLeft = REROLL_SECS;
-    banner('count', 'NEW SEED IN ' + rerollLeft, (rerollBy ? 'from ' + rerollBy + ' · ' : '') + 'this game ends', 0, 1);
+    banner('count', K.count + rerollLeft, (rerollBy ? 'from ' + rerollBy + ' · ' : '') + 'this game ends', 0, 1);
     rerollT = setInterval(function () {
       rerollLeft--;
       if (rerollLeft > 0) {
-        banner('count', 'NEW SEED IN ' + rerollLeft, (rerollBy ? 'from ' + rerollBy + ' · ' : '') + 'this game ends', 0, rerollLeft / REROLL_SECS);
-        if (rerollLeft <= 3) feed('New seed in ' + rerollLeft + '…', 'bad');
+        banner('count', K.count + rerollLeft, (rerollBy ? 'from ' + rerollBy + ' · ' : '') + 'this game ends', 0, rerollLeft / REROLL_SECS);
+        if (rerollLeft <= 3) feed(K.feed + rerollLeft + '…', 'bad');
         render(); return;
       }
       clearInterval(rerollT); rerollT = null;
       rerollBusy = true;
-      banner('roll', 'Rolling a new seed…', 'Same flags as last time', 0);
-      root.Z1Seed.rollAndPlay().then(function (seed) {
-        banner('done-ok', 'New seed ready!', (rerollBy ? 'Courtesy of ' + rerollBy : 'Good luck') + ' · seed ' + seed, 6000);
+      banner('roll', K.roll, K.sub, 0);
+      root.Z1Seed.rollAndPlay({ mode: rerollMode, by: rerollBy }).then(function (seed) {
+        banner('done-ok', K.done, (rerollBy ? 'Courtesy of ' + rerollBy : 'Good luck') + ' · seed ' + seed, 6000);
       }, function (e) {
         rerollBusy = false;
         banner('done-bad', 'Seed reroll failed', String((e && e.message) || e), 6000);
